@@ -95,7 +95,8 @@ class _OrientationScreenState extends State<OrientationScreen> {
                     });
                   } : null,
                 ),
-                Text('Mesurer automatiquement' + (!_hasCompass ? ' (non disponible)' : '')),
+                // Utiliser l'interpolation de chaîne au lieu de la concaténation
+                Text('Mesurer automatiquement${!_hasCompass ? ' (non disponible)' : ''}'),
               ],
             ),
             
@@ -178,7 +179,7 @@ class _OrientationScreenState extends State<OrientationScreen> {
                           ),
                         ),
                         
-                        // Points cardinaux
+                        // Points cardinaux (supprimer le .toList() inutile)
                         ...['N', 'E', 'S', 'O'].asMap().entries.map((entry) {
                           final index = entry.key;
                           final point = entry.value;
@@ -190,7 +191,7 @@ class _OrientationScreenState extends State<OrientationScreen> {
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                           );
-                        }).toList(),
+                        }),
                         
                         // Flèche de direction
                         Transform.rotate(
@@ -221,7 +222,8 @@ class _OrientationScreenState extends State<OrientationScreen> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.1),
+            // Remplacer withOpacity par une couleur avec valeur alpha directe
+            color: const Color.fromRGBO(33, 150, 243, 0.1), // Bleu avec opacité 0.1
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -266,7 +268,8 @@ class _OrientationScreenState extends State<OrientationScreen> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
+            // Remplacer withOpacity par une couleur avec valeur alpha directe
+            color: const Color.fromRGBO(255, 152, 0, 0.1), // Orange avec opacité 0.1
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
