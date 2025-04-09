@@ -25,8 +25,8 @@ class _PansListScreenState extends State<PansListScreen> {
       ),
     );
 
-    // Si l'utilisateur a annulé, on sort
-    if (orientation == null) return;
+    // Si l'utilisateur a annulé ou le widget n'est plus monté, on sort
+    if (orientation == null || !mounted) return;
 
     // Navigation vers l'écran d'inclinaison
     final double? inclination = await Navigator.push<double>(
@@ -36,8 +36,8 @@ class _PansListScreenState extends State<PansListScreen> {
       ),
     );
 
-    // Si l'utilisateur a annulé, on sort
-    if (inclination == null) return;
+    // Si l'utilisateur a annulé ou le widget n'est plus monté, on sort
+    if (inclination == null || !mounted) return;
 
     // Ajout du nouveau pan à la liste
     setState(() {
