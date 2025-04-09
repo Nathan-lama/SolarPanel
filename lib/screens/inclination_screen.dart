@@ -30,7 +30,8 @@ class _InclinationScreenState extends State<InclinationScreen> {
   }
 
   void _startListening() {
-    _accelerometerSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
+    // Utilisation de accelerometerEventStream() au lieu de accelerometerEvents
+    _accelerometerSubscription = accelerometerEventStream().listen((AccelerometerEvent event) {
       if (_autoMeasure) {
         // Calculer l'angle d'inclinaison
         double x = event.x;
@@ -167,7 +168,8 @@ class _InclinationScreenState extends State<InclinationScreen> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.1),
+            // Utiliser une couleur avec valeur alpha directement au lieu de withOpacityec opacity n'est pas disponible
+            color: const Color.fromRGBO(33, 150, 243, 0.1), // Couleur bleue avec alpha à 0.1
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -212,7 +214,8 @@ class _InclinationScreenState extends State<InclinationScreen> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
+            // Utiliser une couleur avec valeur alpha directement au lieu de withOpacityec opacity n'est pas disponible
+            color: const Color.fromRGBO(255, 152, 0, 0.1), // Couleur orange avec alpha à 0.1
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(

@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'inclination_screen.dart';
-import 'pans_list_screen.dart'; // Ajout de l'import manquant
+import 'pans_list_screen.dart';
 
 class LocationScreen extends StatefulWidget {
   const LocationScreen({super.key});

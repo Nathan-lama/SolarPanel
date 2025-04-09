@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'location_screen.dart';
-import 'inclination_screen.dart'; // Ajout de l'import manquant
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
