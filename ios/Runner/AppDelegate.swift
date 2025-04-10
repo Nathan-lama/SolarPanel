@@ -1,15 +1,16 @@
-import Flutter
 import UIKit
+import Flutter
 import GoogleMaps
 
-@main
+@UIApplicationMain
 @objc class AppDelegate: FlutterAppDelegate {
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // Remplacez "YOUR-API-KEY" par votre véritable clé API Google Maps
+    // Initialiser l'API Google Maps avec votre clé
     GMSServices.provideAPIKey("")
+    
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
