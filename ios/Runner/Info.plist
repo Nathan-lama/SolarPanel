@@ -46,9 +46,15 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Cette application a besoin d'accéder à votre localisation pour déterminer l'emplacement de votre installation solaire.</string>
-	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Cette application a besoin d'accéder à votre localisation pour déterminer l'emplacement de votre installation solaire.</string>
+	<string>Cette application a besoin d'accéder à votre localisation pour identifier l'emplacement de votre installation solaire</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Cette application a besoin d'accéder à votre localisation pour identifier l'emplacement de votre installation solaire</string>
+	<key>NSLocationAlwaysUsageDescription</key> 
+	<string>Cette application a besoin d'accéder à votre localisation pour identifier l'emplacement de votre installation solaire</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Cette application a besoin d'accéder à votre caméra pour mesurer les obstacles autour des panneaux solaires</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Cette application utilise les capteurs pour mesurer l'inclinaison et l'orientation des panneaux solaires</string>
 	<key>io.flutter.embedded_views_preview</key>
 	<true/>
 </dict>
