@@ -33,9 +33,13 @@ dependencies:
   geolocator: ^10.1.0
   google_maps_flutter: ^2.5.0
   permission_handler: ^11.0.0
-  sensors_plus: ^4.0.0
+  sensors_plus: ^4.0.2
   flutter_compass: ^0.8.0
   camera: ^0.10.5+9
+  fl_chart: ^0.65.0
+  csv: ^5.1.1
+  path_provider: ^2.1.1
+  share_plus: ^7.2.1
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

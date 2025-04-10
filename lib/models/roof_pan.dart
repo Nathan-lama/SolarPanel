@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'shadow_measurement.dart';
 
 class RoofPan {
   final String id;
@@ -6,12 +7,14 @@ class RoofPan {
   final double inclination;
   final bool hasObstacles;
   final String? obstaclesVideoPath;
+  final List<ShadowMeasurement>? shadowMeasurements;
 
   RoofPan({
     required this.orientation,
     required this.inclination,
     this.hasObstacles = false,
     this.obstaclesVideoPath,
+    this.shadowMeasurements,
   }) : id = Random().nextDouble().toString();
 
   @override
