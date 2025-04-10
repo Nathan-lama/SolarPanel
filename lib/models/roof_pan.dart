@@ -1,16 +1,21 @@
+import 'dart:math';
+
 class RoofPan {
   final String id;
-  final double orientation; // en degrés
-  final double inclination; // en degrés
+  final double orientation;
+  final double inclination;
+  final bool hasObstacles;
+  final String? obstaclesVideoPath;
 
   RoofPan({
-    String? id,
     required this.orientation,
     required this.inclination,
-  }) : id = id ?? DateTime.now().toIso8601String();
+    this.hasObstacles = false,
+    this.obstaclesVideoPath,
+  }) : id = Random().nextDouble().toString();
 
   @override
   String toString() {
-    return 'Orientation: ${orientation.toStringAsFixed(1)}°, Inclinaison: ${inclination.toStringAsFixed(1)}°';
+    return 'Orientation: ${orientation.round()}°, Inclinaison: ${inclination.round()}°${hasObstacles ? " (Obstacles)" : ""}';
   }
 }

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/roof_pan.dart';
 import 'orientation_screen.dart';
 import 'results_screen.dart';
-import 'inclination_screen.dart'; // Ajout de l'import manquant
+import 'inclination_screen.dart';
+import 'obstacles_pan_screen.dart'; // Ajout de l'import pour l'écran des obstacles
 
 class PansListScreen extends StatefulWidget {
   const PansListScreen({super.key});
@@ -39,14 +40,23 @@ class _PansListScreenState extends State<PansListScreen> {
     // Si l'utilisateur a annulé ou le widget n'est plus monté, on sort
     if (inclination == null || !mounted) return;
 
-    // Ajout du nouveau pan à la liste
-    setState(() {
-      _roofPans.add(
-        RoofPan(
+    // Navigation vers l'écran des obstacles
+    final RoofPan? newPan = await Navigator.push<RoofPan>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ObstaclesPanScreen(
           orientation: orientation,
           inclination: inclination,
         ),
-      );
+      ),
+    );
+
+    // Si l'utilisateur a annulé ou le widget n'est plus monté, on sort
+    if (newPan == null || !mounted) return;
+
+    // Ajout du nouveau pan à la liste
+    setState(() {
+      _roofPans.add(newPan);
     });
   }
 
