@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import '../models/roof_pan.dart'; // Pour accéder à la classe RoofPan
+import '../models/roof_pan.dart';
 
 class ObstaclesPanScreen extends StatefulWidget {
   final double orientation;
@@ -17,11 +17,10 @@ class ObstaclesPanScreen extends StatefulWidget {
 }
 
 class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
-  late CameraController _cameraController;
-  List<CameraDescription>? _cameras;
+  CameraController? _controller;
+  bool _isLoading = true;
   bool _isRecording = false;
   String? _videoPath;
-  bool _isCameraInitialized = false;
   bool _hasObstacles = false;
 
   @override
@@ -32,152 +31,292 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
 
   Future<void> _initializeCamera() async {
     try {
-      _cameras = await availableCameras();
-      if (_cameras != null && _cameras!.isNotEmpty) {
-        _cameraController = CameraController(
-          _cameras![0],
-          ResolutionPreset.high,
-          enableAudio: true,
-        );
-        await _cameraController.initialize();
-        if (!mounted) return;
-        setState(() {
-          _isCameraInitialized = true;
-        });
+      final cameras = await availableCameras();
+      
+      if (cameras.isEmpty) {
+        setState(() => _isLoading = false);
+        return;
       }
+
+      final controller = CameraController(
+        cameras.first,
+        ResolutionPreset.medium,
+        enableAudio: true,
+      );
+
+      await controller.initialize();
+      
+      if (!mounted) return;
+      
+      setState(() {
+        _controller = controller;
+        _isLoading = false;
+      });
     } catch (e) {
       if (!mounted) return;
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur lors de l\'initialisation de la caméra: $e')),
+        SnackBar(content: Text('Erreur de caméra: $e')),
       );
     }
   }
 
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
   Future<void> _toggleRecording() async {
+    if (_controller == null) return;
+
     if (_isRecording) {
-      final XFile video = await _cameraController.stopVideoRecording();
-      if (!mounted) return;
+      final file = await _controller!.stopVideoRecording();
       setState(() {
         _isRecording = false;
-        _videoPath = video.path;
+        _videoPath = file.path;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vidéo enregistrée')),
-      );
     } else {
-      await _cameraController.startVideoRecording();
-      if (!mounted) return;
+      await _controller!.prepareForVideoRecording();
+      await _controller!.startVideoRecording();
       setState(() {
         _isRecording = true;
       });
     }
   }
 
-  @override
-  void dispose() {
-    if (_isCameraInitialized) {
-      _cameraController.dispose();
-    }
-    super.dispose();
-  }
-
-  void _finishAndReturnToPansList() {
-    // Créer le pan de toit avec toutes les informations collectées
-    final newPan = RoofPan(
-      orientation: widget.orientation,
-      inclination: widget.inclination,
-      hasObstacles: _hasObstacles,
-      obstaclesVideoPath: _videoPath,
+  void _finishAndReturn() {
+    Navigator.pop(
+      context,
+      RoofPan(
+        orientation: widget.orientation,
+        inclination: widget.inclination,
+        hasObstacles: _hasObstacles,
+        obstaclesVideoPath: _videoPath,
+      ),
     );
-    
-    // Retourner à la liste des pans avec le nouveau pan créé
-    Navigator.pop(context, newPan);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isCameraInitialized) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détection d\'obstacles'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _hasObstacles 
-                ? CameraPreview(_cameraController)
-                : const Center(child: Text('Pas d\'obstacles à filmer')),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
               children: [
-                const Text(
-                  'Y a-t-il des obstacles qui pourraient affecter les panneaux solaires ?',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
+                // Section principale
+                Expanded(
+                  child: _buildMainContent(),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                
+                // Section inférieure
+                _buildBottomControls(),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildMainContent() {
+    // Si on a choisi qu'il y a des obstacles et que la caméra est disponible
+    if (_hasObstacles && _controller != null) {
+      return Stack(
+        children: [
+          // Prévisualisation de la caméra
+          Positioned.fill(
+            child: CameraPreview(_controller!),
+          ),
+          
+          // Indicateurs
+          if (_videoPath != null)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Présence d\'obstacles:'),
-                    Switch(
-                      value: _hasObstacles,
-                      onChanged: (value) {
-                        setState(() {
-                          _hasObstacles = value;
-                          if (!_hasObstacles) {
-                            // Si on désactive les obstacles, on annule la vidéo
-                            _videoPath = null;
-                            if (_isRecording) {
-                              _cameraController.stopVideoRecording();
-                              _isRecording = false;
-                            }
-                          }
-                        });
-                      },
+                    Icon(Icons.check, color: Colors.white, size: 16),
+                    SizedBox(width: 4),
+                    Text(
+                      'Vidéo enregistrée',
+                      style: TextStyle(color: Colors.white, fontSize: 12),
                     ),
-                    Text(_hasObstacles ? 'Oui' : 'Non'),
                   ],
                 ),
-                const SizedBox(height: 16),
-                if (_hasObstacles)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      ElevatedButton(
-                        onPressed: _toggleRecording,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _isRecording ? Colors.red : Colors.blue,
-                        ),
-                        child: Text(_isRecording ? 'Arrêter' : 'Enregistrer vidéo'),
-                      ),
-                      if (_videoPath != null)
-                        const Icon(Icons.check_circle, color: Colors.green),
-                    ],
-                  ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: (_hasObstacles && _videoPath == null && !_isRecording) 
-                      ? null 
-                      : _finishAndReturnToPansList,
-                  child: const Text('Terminer et ajouter le pan'),
+              ),
+            ),
+          
+          // Bouton d'enregistrement
+          Positioned(
+            bottom: 20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: FloatingActionButton(
+                backgroundColor: _isRecording ? Colors.red : Colors.white,
+                onPressed: _toggleRecording,
+                child: Icon(
+                  _isRecording ? Icons.stop : Icons.videocam,
+                  color: _isRecording ? Colors.white : Colors.red,
+                  size: 30,
                 ),
-              ],
+              ),
+            ),
+          ),
+        ],
+      );
+    } 
+    
+    // Sinon, on affiche un écran d'information
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _hasObstacles ? Icons.warning_amber : Icons.check_circle,
+              size: 80,
+              color: _hasObstacles ? Colors.orange : Colors.green,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              _hasObstacles
+                  ? 'La caméra n\'est pas disponible'
+                  : 'Pas d\'obstacles détectés',
+              style: Theme.of(context).textTheme.headlineSmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _hasObstacles
+                  ? 'Impossible d\'accéder à la caméra. Vous pouvez continuer sans enregistrer de vidéo.'
+                  : 'Vous avez indiqué qu\'il n\'y a pas d\'obstacles autour du pan de toit.',
+              style: Theme.of(context).textTheme.bodyLarge,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomControls() {
+    return Container(
+      color: Theme.of(context).colorScheme.surface,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Question
+          Text(
+            'Y a-t-il des obstacles autour de ce pan de toit?',
+            style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          
+          // Options Oui/Non
+          Row(
+            children: [
+              Expanded(
+                child: _buildOptionButton(
+                  label: 'Non',
+                  icon: Icons.clear,
+                  isSelected: !_hasObstacles,
+                  color: Colors.green,
+                  onTap: () {
+                    setState(() {
+                      _hasObstacles = false;
+                      _isRecording = false;
+                      _videoPath = null;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildOptionButton(
+                  label: 'Oui',
+                  icon: Icons.warning,
+                  isSelected: _hasObstacles,
+                  color: Colors.orange,
+                  onTap: () {
+                    setState(() {
+                      _hasObstacles = true;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          
+          // Bouton de validation
+          ElevatedButton(
+            onPressed: _canContinue() ? _finishAndReturn : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            child: Text(
+              _hasObstacles && _videoPath == null
+                  ? 'Enregistrez une vidéo d\'abord'
+                  : 'Continuer',
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildOptionButton({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: isSelected ? color : Colors.grey.shade200,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: isSelected ? Colors.white : Colors.grey.shade700),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? Colors.white : Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _canContinue() {
+    if (!_hasObstacles) return true; // Pas d'obstacles, on peut continuer
+    return _videoPath != null; // Sinon, on vérifie qu'une vidéo est enregistrée
   }
 }
