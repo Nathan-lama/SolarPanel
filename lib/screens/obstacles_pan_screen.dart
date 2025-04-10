@@ -30,7 +30,6 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
   // Données des capteurs
   double _azimuth = 0.0;
   double _elevation = 0.0;
-  bool _hasCompass = false;
   
   // Liste des mesures
   final List<ShadowMeasurement> _measurements = [];
@@ -47,21 +46,16 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
   @override
   void initState() {
     super.initState();
-    _checkCompassAvailability();
     _initSensors();
     // Initialiser la caméra après un court délai pour s'assurer que le widget est monté
     Future.delayed(Duration.zero, _initCamera);
   }
   
-  void _checkCompassAvailability() async {
-    _hasCompass = await FlutterCompass.events != null;
-    if (mounted) setState(() {});
-  }
-  
   void _initSensors() {
     // Initialiser la boussole
-    if (FlutterCompass.events != null) {
-      _compassSubscription = FlutterCompass.events!.listen((CompassEvent event) {
+    final compassEvents = FlutterCompass.events;
+    if (compassEvents != null) {
+      _compassSubscription = compassEvents.listen((CompassEvent event) {
         if (event.heading != null && mounted) {
           setState(() {
             _azimuth = event.heading!;
@@ -72,21 +66,27 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
       });
     }
     
-    // Initialiser l'accéléromètre pour calculer l'angle d'élévation
-    _accelerometerSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
-      // Calcul de l'angle d'inclinaison à partir des données de l'accéléromètre
+    // Modifier la méthode de calcul de l'élévation
+    // Utiliser accelerometerEventStream() au lieu de accelerometerEvents
+    _accelerometerSubscription = accelerometerEventStream().listen((AccelerometerEvent event) {
+      // Calcul amélioré de l'angle d'élévation à partir des données de l'accéléromètre
+      // Formule modifiée pour une meilleure réponse quand on pointe vers le bas
       final double x = event.x;
       final double y = event.y;
       final double z = event.z;
       
-      // Calculer l'angle d'élévation (pitch)
-      double pitch = atan2(-x, sqrt(y * y + z * z)) * (180 / pi);
+      // Cette formule donne une élévation positive quand on pointe vers le haut
+      // et négative quand on pointe vers le bas
+      double pitch = atan2(z, sqrt(x * x + y * y)) * (180 / pi);
+      
+      // Inverser pour correspondre à la convention: positif vers le haut, négatif vers le bas
+      pitch = -pitch;
       
       if (mounted) {
         setState(() {
           _elevation = pitch;
-          // Assurer que l'élévation est entre 0 et 90
-          _elevation = _elevation.clamp(0.0, 90.0);
+          // Ne limitons plus l'élévation entre 0 et 90, permettons les valeurs négatives
+          // pour indiquer correctement quand on pointe sous l'horizon
         });
       }
     });
@@ -141,14 +141,8 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
       _measurements.add(measurement);
     });
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Mesure ajoutée: Azimut ${_azimuth.toStringAsFixed(1)}°, Élévation ${_elevation.toStringAsFixed(1)}°'),
-        duration: const Duration(seconds: 1),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(8),
-      ),
-    );
+    // Suppression de la notification SnackBar pour ne pas gêner l'utilisation du bouton
+    // La mise à jour visuelle de la liste des mesures est un feedback suffisant
   }
   
   Future<void> _exportToCsv() async {
@@ -217,41 +211,33 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Fond noir pour éviter les espaces vides si la caméra ne remplit pas tout l'écran
-          Container(color: Colors.black),
-          
-          // Fond de caméra avec aspect ratio correct
-          _buildCameraBackground(),
-          
-          // Interface utilisateur superposée
-          SafeArea(
-            child: Column(
-              children: [
-                // Barre supérieure avec bouton de retour
-                _buildAppBar(),
-                
-                // Affichage des capteurs
-                _buildSensorOverlay(),
-                
-                const Spacer(),
-                
-                // Liste des mesures
-                _buildMeasurementsList(),
-                
-                // Boutons d'action
-                _buildBottomControls(),
-              ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Barre supérieure avec bouton de retour
+            _buildAppBar(),
+            
+            // Affichage des capteurs (azimut et élévation)
+            _buildSensorOverlay(),
+            
+            // Vue caméra (maintenant sous les capteurs)
+            Expanded(
+              child: _buildCameraView(),
             ),
-          ),
-        ],
+            
+            // Liste des mesures
+            _buildMeasurementsList(),
+            
+            // Boutons d'action
+            _buildBottomControls(),
+          ],
+        ),
       ),
     );
   }
   
-  Widget _buildCameraBackground() {
+  // Nouveau widget pour la vue caméra (qui était précédemment _buildCameraBackground)
+  Widget _buildCameraView() {
     if (!_isCameraInitialized) {
       return Container(
         color: Colors.black,
@@ -260,36 +246,168 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
         ),
       );
     }
+
+    // Calculer la position verticale du point en fonction de l'élévation
+    // Le point monte quand l'élévation est positive, descend quand négative
+    const sensitivity = 4.0;
+    final pointOffsetY = _elevation * sensitivity;
+    final bool isPointingUp = _elevation > 0;
     
-    // Utiliser une approche beaucoup plus directe avec moins de transformations
-    return Container(
-      color: Colors.black,
-      child: Align(
-        alignment: Alignment.center,
+    return ClipRRect(
+      // Arrondir les coins pour un aspect plus esthétique
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        color: Colors.black,
         child: Stack(
           children: [
-            // La caméra sans transformations supplémentaires
-            CameraPreview(_cameraController!),
-            
-            // Ajouter un indicateur pour le centre
+            // Vue caméra
             Positioned.fill(
-              child: Center(
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.7),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
+              child: CameraPreview(_cameraController!),
+            ),
+            
+            // Utiliser LayoutBuilder pour obtenir les dimensions de la zone de caméra
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // Centre vertical de cette zone de caméra
+                final centerY = constraints.maxHeight / 2;
+                
+                return Stack(
+                  children: [
+                    // Ligne d'horizon fixe (ligne jaune)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: centerY,
+                      child: Container(
+                        height: 1.5,
+                        color: Colors.yellow.withAlpha(179),
+                      ),
+                    ),
+                    
+                    // Point central qui se déplace selon l'élévation
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 100),
+                      curve: Curves.easeOut,
+                      left: constraints.maxWidth / 2 - 5,
+                      top: centerY - pointOffsetY - 5,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: isPointingUp ? Colors.red : Colors.blue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1),
+                        ),
+                      ),
+                    ),
+                    
+                    // Points cardinaux sur la ligne d'horizon
+                    Positioned(
+                      top: centerY - 20,
+                      left: 0,
+                      right: 0,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildCardinalPoint('O', Colors.white),
+                          _buildCardinalPoint('N', Colors.red),
+                          _buildCardinalPoint('E', Colors.white),
+                          _buildCardinalPoint('S', Colors.white),
+                        ],
+                      ),
+                    ),
+                    
+                    // Lignes de repère pour l'élévation
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: centerY - 30 * sensitivity,
+                      child: Container(
+                        height: 1,
+                        color: Colors.green.withAlpha(128),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(2),
+                              color: Colors.black.withAlpha(128),
+                              child: const Text(
+                                '+30°',
+                                style: TextStyle(color: Colors.green, fontSize: 10),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: centerY + 30 * sensitivity,
+                      child: Container(
+                        height: 1,
+                        color: Colors.red.withAlpha(128),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(2),
+                              color: Colors.black.withAlpha(128),
+                              child: const Text(
+                                '-30°',
+                                style: TextStyle(color: Colors.red, fontSize: 10),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    // Affichage de débogage pour l'élévation
+                    Positioned(
+                      top: 20,
+                      left: 20,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withAlpha(179),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Élév: ${_elevation.toStringAsFixed(1)}°',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              'Direction: ${_elevation > 0 ? "↑ HAUT" : "↓ BAS"}',
+                              style: TextStyle(
+                                color: _elevation > 0 ? Colors.red : Colors.blue,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
       ),
     );
   }
-  
+
   Widget _buildAppBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -298,7 +416,7 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.black.withOpacity(0.7),
+            Colors.black.withAlpha(179),
             Colors.transparent
           ],
         ),
@@ -347,23 +465,24 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
             Icons.explore,
           ),
           
+          // Remplacer le bouton de prise de mesure par le bouton Terminer ici
           GestureDetector(
-            onTap: _addMeasurement,
+            onTap: _finishAndReturn,
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.9),
+                color: Colors.green.withAlpha(230),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withAlpha(77),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
                 ],
               ),
               child: const Icon(
-                Icons.add_location_alt,
+                Icons.check,
                 color: Colors.white,
                 size: 32,
               ),
@@ -373,7 +492,7 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
           _buildSensorDisplay(
             "ÉLÉVATION",
             "${_elevation.toStringAsFixed(1)}°",
-            Colors.orange,
+            _elevation >= 0 ? Colors.orange : Colors.blue,
             Icons.trending_up,
           ),
         ],
@@ -385,10 +504,10 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.6),
+        color: Colors.black.withAlpha(153),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: color.withOpacity(0.7),
+          color: color.withAlpha(179),
           width: 2,
         ),
       ),
@@ -430,7 +549,7 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.6),
+          color: Colors.black.withAlpha(153),
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Text(
@@ -445,7 +564,7 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
       height: 120,
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.6),
+        color: Colors.black.withAlpha(153),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -473,7 +592,7 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
                   width: 120,
                   margin: const EdgeInsets.only(right: 8, bottom: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withAlpha(51),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   padding: const EdgeInsets.all(8),
@@ -538,7 +657,7 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
           colors: [
-            Colors.black.withOpacity(0.8),
+            Colors.black.withAlpha(204),
             Colors.transparent,
           ],
         ),
@@ -546,6 +665,7 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
+          // Bouton "CSV" maintenant en première position
           _buildActionButton(
             'CSV',
             Icons.file_download,
@@ -553,13 +673,15 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
             _exportToCsv,
           ),
           
+          // Bouton "Mesurer" maintenant en deuxième position
           _buildActionButton(
-            'Terminer',
-            Icons.check,
-            Colors.green.shade700,
-            _finishAndReturn,
+            'Mesurer',
+            Icons.add_location_alt,
+            Colors.orange.shade700,
+            _addMeasurement,
           ),
           
+          // Le bouton "Graphique" reste en dernière position
           _buildActionButton(
             'Graphique',
             Icons.pie_chart,
@@ -592,6 +714,24 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildCardinalPoint(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withAlpha(128),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

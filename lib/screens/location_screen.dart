@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:geocoding/geocoding.dart'; // Ajouter ce package pour la géolocalisation d'adresses
 import 'pans_list_screen.dart';
 
 class LocationScreen extends StatefulWidget {
@@ -17,11 +18,19 @@ class _LocationScreenState extends State<LocationScreen> {
   String _errorMessage = '';
   GoogleMapController? _mapController;
   final Set<Marker> _markers = {};
+  final TextEditingController _addressController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _mapController?.dispose();
+    super.dispose();
   }
 
   Future<void> _getCurrentLocation() async {
@@ -105,6 +114,89 @@ class _LocationScreenState extends State<LocationScreen> {
     }
   }
 
+  Future<void> _geocodeAddress(String address) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+    
+    try {
+      // Obtenir les coordonnées à partir de l'adresse
+      List<Location> locations = await locationFromAddress(address);
+      
+      if (locations.isNotEmpty) {
+        // Prendre la première correspondance
+        Location location = locations.first;
+        
+        // Créer une Position pour maintenir la compatibilité avec le reste du code
+        Position position = Position(
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timestamp: DateTime.now(),
+          accuracy: 0,
+          altitude: 0,
+          heading: 0,
+          speed: 0,
+          speedAccuracy: 0,
+          altitudeAccuracy: 0,
+          headingAccuracy: 0,
+        );
+        
+        setState(() {
+          _currentPosition = position;
+          _isLoading = false;
+        });
+        
+        // Ajouter un marqueur et centrer la carte
+        _addMarker(LatLng(position.latitude, position.longitude));
+        _animateToPosition(position);
+      } else {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Adresse non trouvée';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Erreur de géolocalisation: ${e.toString()}';
+      });
+    }
+  }
+  
+  void _showAddressDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Entrer une adresse'),
+          content: TextField(
+            controller: _addressController,
+            decoration: const InputDecoration(
+              labelText: 'Adresse complète',
+              hintText: 'Ex: 20 Avenue de Ségur, 75007 Paris, France',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                if (_addressController.text.isNotEmpty) {
+                  _geocodeAddress(_addressController.text);
+                }
+              },
+              child: const Text('Rechercher'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,14 +243,7 @@ class _LocationScreenState extends State<LocationScreen> {
                 ),
                 const SizedBox(height: 10),
                 TextButton(
-                  onPressed: () {
-                    // Cette fonctionnalité sera implémentée plus tard
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Fonctionnalité à venir'),
-                      ),
-                    );
-                  },
+                  onPressed: _showAddressDialog, // Modification ici pour appeler le dialogue
                   child: const Text('Entrer l\'adresse manuellement'),
                 ),
               ],
