@@ -6,7 +6,6 @@ import 'package:flutter_compass/flutter_compass.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:camera/camera.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:csv/csv.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/roof_pan.dart';
 import '../models/shadow_measurement.dart';
@@ -15,11 +14,13 @@ import 'shadow_chart_screen.dart';
 class ObstaclesPanScreen extends StatefulWidget {
   final double orientation;
   final double inclination;
+  final double peakPower; // Nouvelle propriété pour la puissance crête
   
   const ObstaclesPanScreen({
     super.key, 
     required this.orientation,
     required this.inclination,
+    required this.peakPower, // Ajouter le paramètre au constructeur
   });
 
   @override
@@ -201,6 +202,7 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
       RoofPan(
         orientation: widget.orientation,
         inclination: widget.inclination,
+        peakPower: widget.peakPower, // Ajouter la puissance PV
         hasObstacles: hasObstacles,
         shadowMeasurements: hasObstacles ? _measurements : null,
       ),

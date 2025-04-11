@@ -4,6 +4,7 @@ import 'orientation_screen.dart';
 import 'results_screen.dart';
 import 'inclination_screen.dart';
 import 'obstacles_pan_screen.dart'; // Ajout de l'import pour l'écran des obstacles
+import 'peak_power_screen.dart'; // Ajout de l'import pour l'écran de puissance crête
 
 class PansListScreen extends StatefulWidget {
   const PansListScreen({super.key});
@@ -18,6 +19,17 @@ class _PansListScreenState extends State<PansListScreen> {
 
   // Méthode pour ajouter un nouveau pan
   Future<void> _addNewPan() async {
+    // Navigation vers l'écran de puissance crête (nouveau)
+    final double? peakPower = await Navigator.push<double>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const PeakPowerScreen(),
+      ),
+    );
+
+    // Si l'utilisateur a annulé ou le widget n'est plus monté, on sort
+    if (peakPower == null || !mounted) return;
+
     // Navigation vers l'écran d'orientation
     final double? orientation = await Navigator.push<double>(
       context,
@@ -47,6 +59,7 @@ class _PansListScreenState extends State<PansListScreen> {
         builder: (context) => ObstaclesPanScreen(
           orientation: orientation,
           inclination: inclination,
+          peakPower: peakPower, // Ajouter la puissance PV
         ),
       ),
     );

@@ -17,12 +17,16 @@ class _RoofInclinationScreenState extends State<RoofInclinationScreen> {
     // Obtenir l'orientation du panData existant
     final double orientation = widget.panData['orientation'] ?? 0.0;
     
-    // Navigation vers l'écran des obstacles avec orientation et inclinaison
+    // Obtenir la puissance PV du panData existant ou utiliser une valeur par défaut de 3.0
+    final double peakPower = widget.panData['peakPower'] ?? 3.0;
+    
+    // Navigation vers l'écran des obstacles avec orientation, inclinaison et puissance crête
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => ObstaclesPanScreen(
           orientation: orientation,
           inclination: _selectedInclination,
+          peakPower: peakPower, // Ajouter le paramètre requis
         ),
       ),
     );
