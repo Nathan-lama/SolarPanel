@@ -153,21 +153,28 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
       return;
     }
     
-    // Préparer les données CSV
-    List<List<dynamic>> rows = [];
-    rows.add(ShadowMeasurement.csvHeaders());
-    rows.addAll(_measurements.map((m) => m.toCsvRow()));
+    // Format brut sans en-têtes ni annotations
+    StringBuffer csvContent = StringBuffer();
     
-    String csv = const ListToCsvConverter().convert(rows);
+    // Trier les mesures par azimut
+    final sortedMeasurements = [..._measurements];
+    sortedMeasurements.sort((a, b) => a.azimuth.compareTo(b.azimuth));
+    
+    // Ajouter uniquement les valeurs d'élévation
+    for (var measurement in sortedMeasurements) {
+      // Écrire uniquement la valeur d'élévation
+      csvContent.writeln(measurement.elevation.toStringAsFixed(1));
+    }
     
     // Sauvegarder dans un fichier temporaire
     final directory = await getTemporaryDirectory();
-    final path = '${directory.path}/masques_ombre_${DateTime.now().millisecondsSinceEpoch}.csv';
+    final filename = 'horizon_${DateTime.now().millisecondsSinceEpoch ~/ 1000}.csv';
+    final path = '${directory.path}/$filename';
     final File file = File(path);
-    await file.writeAsString(csv);
+    await file.writeAsString(csvContent.toString());
     
     // Partager le fichier
-    await Share.shareXFiles([XFile(path)], text: 'Mesures de masques d\'ombre');
+    await Share.shareXFiles([XFile(path)], text: 'Données horizon');
   }
   
   void _viewChart() {
@@ -681,7 +688,6 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
             _addMeasurement,
           ),
           
-          // Le bouton "Graphique" reste en dernière position
           _buildActionButton(
             'Graphique',
             Icons.pie_chart,
