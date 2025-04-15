@@ -197,6 +197,20 @@ class _LocationScreenState extends State<LocationScreen> {
     );
   }
 
+  void _continueToNextScreen() {
+    if (_currentPosition != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PansListScreen(
+            latitude: _currentPosition!.latitude,
+            longitude: _currentPosition!.longitude,
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -225,14 +239,7 @@ class _LocationScreenState extends State<LocationScreen> {
                   height: 50,
                   child: ElevatedButton(
                     onPressed: _currentPosition != null
-                        ? () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const PansListScreen(),
-                              ),
-                            );
-                          }
+                        ? _continueToNextScreen
                         : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.primary,

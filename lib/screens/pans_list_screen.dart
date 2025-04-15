@@ -7,7 +7,14 @@ import 'obstacles_pan_screen.dart'; // Ajout de l'import pour l'écran des obsta
 import 'peak_power_screen.dart'; // Ajout de l'import pour l'écran de puissance crête
 
 class PansListScreen extends StatefulWidget {
-  const PansListScreen({super.key});
+  final double latitude;
+  final double longitude;
+  
+  const PansListScreen({
+    super.key, 
+    required this.latitude, 
+    required this.longitude
+  });
 
   @override
   State<PansListScreen> createState() => _PansListScreenState();
@@ -94,7 +101,11 @@ class _PansListScreenState extends State<PansListScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ResultsScreen(roofPans: _roofPans),
+        builder: (context) => ResultsScreen(
+          roofPans: _roofPans,
+          latitude: widget.latitude,
+          longitude: widget.longitude,
+        ),
       ),
     );
   }
