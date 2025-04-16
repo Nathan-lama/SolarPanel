@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/roof_pan.dart';
 import 'orientation_screen.dart';
-import 'results_screen.dart';
 import 'inclination_screen.dart';
 import 'obstacles_pan_screen.dart'; // Ajout de l'import pour l'écran des obstacles
 import 'peak_power_screen.dart'; // Ajout de l'import pour l'écran de puissance crête
+import 'pan_analysis_screen.dart'; // Nouvel import
+import '../services/firebase_service.dart'; // Ajouter l'import pour le service Firebase
 
 class PansListScreen extends StatefulWidget {
   final double latitude;
@@ -23,6 +24,9 @@ class PansListScreen extends StatefulWidget {
 class _PansListScreenState extends State<PansListScreen> {
   // Liste temporaire pour stocker les pans de toit
   final List<RoofPan> _roofPans = [];
+
+  // Ajouter une variable pour gérer l'état de chargement
+  bool _isLoading = false;
 
   // Méthode pour ajouter un nouveau pan
   Future<void> _addNewPan() async {
@@ -87,8 +91,8 @@ class _PansListScreenState extends State<PansListScreen> {
     });
   }
 
-  // Navigation vers l'écran de résultats
-  void _navigateToResults() {
+  // Méthode pour envoyer les données à Firebase
+  Future<void> _sendDataToFirebase() async {
     if (_roofPans.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -98,11 +102,53 @@ class _PansListScreenState extends State<PansListScreen> {
       return;
     }
 
+    setState(() => _isLoading = true);
+    
+    try {
+      // Créer un objet contenant toutes les informations
+      final data = {
+        'latitude': widget.latitude,
+        'longitude': widget.longitude,
+        'timestamp': DateTime.now().toIso8601String(),
+        'roofPans': _roofPans.map((pan) => pan.toJson()).toList(),
+      };
+      
+      // Envoyer les données à Firebase
+      await FirebaseService.saveRoofData(data);
+      
+      // Afficher un message de confirmation
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Données envoyées avec succès'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      // Gérer les erreurs
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // Navigation vers l'analyse d'un pan spécifique
+  void _navigateToPanAnalysis(RoofPan pan) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ResultsScreen(
-          roofPans: _roofPans,
+        builder: (context) => PanAnalysisScreen(
+          roofPan: pan,
           latitude: widget.latitude,
           longitude: widget.longitude,
         ),
@@ -154,13 +200,24 @@ class _PansListScreenState extends State<PansListScreen> {
                 SizedBox(
                   width: double.infinity,
                   height: 50,
-                  child: ElevatedButton(
-                    onPressed: _navigateToResults,
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _sendDataToFirebase,
+                    icon: _isLoading 
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.cloud_upload),
+                    label: Text(_isLoading ? 'Envoi en cours...' : 'Envoyer les données'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.secondary,
                       foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey,
                     ),
-                    child: const Text('Analyser tous les pans'),
                   ),
                 ),
               ],
@@ -239,10 +296,22 @@ class _PansListScreenState extends State<PansListScreen> {
               ),
               title: Text('Pan ${index + 1}'),
               subtitle: Text(pan.toString()),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => _deletePan(pan.id),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.analytics_outlined),
+                    tooltip: 'Analyser ce pan',
+                    onPressed: () => _navigateToPanAnalysis(pan),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Supprimer ce pan',
+                    onPressed: () => _deletePan(pan.id),
+                  ),
+                ],
               ),
+              onTap: () => _navigateToPanAnalysis(pan),
             ),
           ),
         );

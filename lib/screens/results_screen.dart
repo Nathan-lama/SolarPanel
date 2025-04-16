@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/roof_pan.dart';
 import '../services/pvgis_service.dart';

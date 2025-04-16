@@ -40,8 +40,12 @@ class SunPathPainter extends CustomPainter {
   
   // Nouvelle méthode pour dessiner une sphère
   void _drawSphere(Canvas canvas) {
+    // Get the base color
+    final Color baseColor = Colors.blue.shade100;
+    
+    // Create a new color with the desired opacity using withAlpha
     final Paint spherePaint = Paint()
-      ..color = Colors.blue.shade100.withOpacity(0.2)
+      ..color = baseColor.withAlpha(51)  // 0.2 * 255 = ~51
       ..style = PaintingStyle.fill;
       
     // Cercle extérieur représentant la sphère céleste
@@ -152,7 +156,7 @@ class SunPathPainter extends CustomPainter {
       
       // Zone d'ombre pour les obstacles
       final Paint shadowPaint = Paint()
-        ..color = Colors.red.withOpacity(0.1)
+        ..color = Colors.red.withAlpha(26)  // 0.1 * 255 = ~26
         ..style = PaintingStyle.fill;
       
       // Créer un chemin fermé pour la zone d'ombre

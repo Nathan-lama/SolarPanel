@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../charts/monthly_production_chart.dart';
 
 class MonthlyProductionWidget extends StatelessWidget {
   final Map<String, dynamic>? apiResults;
@@ -44,6 +45,11 @@ class MonthlyProductionWidget extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
+            
+            // Graphique à barres de la production mensuelle
+            MonthlyProductionChart(monthlyData: List<Map<String, dynamic>>.from(fixedMonthly)),
+            
+            const SizedBox(height: 24),
             
             // Table des données mensuelles
             Table(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/roof_pan.dart';
+import '../charts/monthly_radiation_chart.dart';
 
 class MonthlyRadiationWidget extends StatelessWidget {
   final Map<String, dynamic>? radiationResults;
@@ -77,6 +78,11 @@ class MonthlyRadiationWidget extends StatelessWidget {
               style: const TextStyle(fontSize: 14),
             ),
             const SizedBox(height: 16),
+            
+            // Graphique à barres de radiation mensuelle
+            MonthlyRadiationChart(monthlyData: List<Map<String, dynamic>>.from(lastYearData)),
+            
+            const SizedBox(height: 24),
             
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,

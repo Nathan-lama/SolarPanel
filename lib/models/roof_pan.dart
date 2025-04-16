@@ -26,4 +26,20 @@ class RoofPan {
            'Puissance: ${peakPower.toStringAsFixed(1)} kWp | '
            'Obstacles: ${hasObstacles ? "Oui" : "Non"}';
   }
+
+  /// Convertir le pan de toit en Map pour le stockage Firebase
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'orientation': orientation,
+      'inclination': inclination,
+      'peakPower': peakPower,
+      'hasObstacles': hasObstacles,
+      // Convertir les mesures d'ombre en Liste de Maps
+      'shadowMeasurements': shadowMeasurements?.map((measurement) => {
+            'azimuth': measurement.azimuth,
+            'elevation': measurement.elevation,
+          }).toList(),
+    };
+  }
 }
