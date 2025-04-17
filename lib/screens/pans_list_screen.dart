@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'dart:developer' as developer;
 import '../models/roof_pan.dart';
 import 'orientation_screen.dart';
 import 'inclination_screen.dart';
-import 'obstacles_pan_screen.dart'; // Ajout de l'import pour l'écran des obstacles
-import 'peak_power_screen.dart'; // Ajout de l'import pour l'écran de puissance crête
-import 'pan_analysis_screen.dart'; // Nouvel import
-import '../services/firebase_service.dart'; // Ajouter l'import pour le service Firebase
+import 'obstacles_pan_screen.dart';
+import 'peak_power_screen.dart';
+import 'pan_analysis_screen.dart';
+import '../services/supabase_service.dart'; // Remplacer Firebase par Supabase
 
 class PansListScreen extends StatefulWidget {
   final double latitude;
@@ -27,6 +28,11 @@ class _PansListScreenState extends State<PansListScreen> {
 
   // Ajouter une variable pour gérer l'état de chargement
   bool _isLoading = false;
+
+  // Variables pour le débogage
+  DateTime? _lastSendAttempt;
+  int _sendAttemptCount = 0;
+  String _debugInfo = '';
 
   // Méthode pour ajouter un nouveau pan
   Future<void> _addNewPan() async {
@@ -91,47 +97,91 @@ class _PansListScreenState extends State<PansListScreen> {
     });
   }
 
-  // Méthode pour envoyer les données à Firebase
-  Future<void> _sendDataToFirebase() async {
+  // Méthode mise à jour pour envoyer les données à Supabase
+  Future<void> _sendDataToSupabase() async {
+    // Déboguer les appels multiples
+    final now = DateTime.now();
+    _sendAttemptCount++;
+    
+    developer.log(
+      '[ENVOI_DEBUG] Tentative #$_sendAttemptCount - ${now.hour}:${now.minute}:${now.second}.${now.millisecond}',
+      name: 'PanListScreen'
+    );
+    
+    // Protection contre les clics rapides
+    if (_lastSendAttempt != null && now.difference(_lastSendAttempt!).inSeconds < 2) {
+      developer.log(
+        '[ENVOI_DEBUG] Tentative ignorée - trop rapprochée (${now.difference(_lastSendAttempt!).inMilliseconds}ms)',
+        name: 'PanListScreen'
+      );
+      return;
+    }
+    
+    _lastSendAttempt = now;
+    
     if (_roofPans.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez ajouter au moins un pan de toit'),
-        ),
+        const SnackBar(content: Text('Veuillez ajouter au moins un pan de toit')),
       );
       return;
     }
 
-    setState(() => _isLoading = true);
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      _debugInfo = 'Début envoi: ${DateTime.now().toString().substring(11, 23)}';
+    });
     
     try {
-      // Créer un objet contenant toutes les informations
+      // Créer un objet contenant toutes les informations avec le bon format
       final data = {
         'latitude': widget.latitude,
         'longitude': widget.longitude,
         'timestamp': DateTime.now().toIso8601String(),
-        'roofPans': _roofPans.map((pan) => pan.toJson()).toList(),
+        'roof_pans': _roofPans.map((pan) {
+          // S'assurer que toutes les clés nécessaires sont présentes
+          return {
+            'peakPower': pan.peakPower,
+            'inclination': pan.inclination,
+            'orientation': pan.orientation,
+            'hasObstacles': pan.hasObstacles,
+            'shadowMeasurements': pan.shadowMeasurements?.map((measurement) => {
+              'azimuth': measurement.azimuth,
+              'elevation': measurement.elevation,
+            }).toList() ?? [],
+          };
+        }).toList(),
       };
       
-      // Envoyer les données à Firebase
-      await FirebaseService.saveRoofData(data);
+      // Afficher les données pour le débogage
+      developer.log('[DEBUG] Données à envoyer: $data', name: 'PanListScreen');
       
-      // Afficher un message de confirmation
+      // Envoyer les données à Supabase
+      await SupabaseService.saveRoofData(data);
+      
       if (mounted) {
+        setState(() => _debugInfo += '\nSuccès: ${DateTime.now().toString().substring(11, 23)}');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Données envoyées avec succès'),
+            content: Text('Données envoyées avec succès à Supabase'),
             backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
-      // Gérer les erreurs
+      // Amélioration de la gestion des erreurs pour le débogage
+      String errorMessage = e.toString();
+      
+      developer.log('[ENVOI_DEBUG] Erreur: $errorMessage', name: 'PanListScreen', error: e);
+      
       if (mounted) {
+        setState(() => _debugInfo += '\nErreur: ${DateTime.now().toString().substring(11, 23)} - $errorMessage');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erreur: ${e.toString()}'),
+            content: Text('Erreur: $errorMessage'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5), // Plus de temps pour lire l'erreur
           ),
         );
       }
@@ -161,6 +211,39 @@ class _PansListScreenState extends State<PansListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Pans de toit'),
+        actions: [
+          // Bouton de débogage
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Informations de débogage'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Tentatives d\'envoi: $_sendAttemptCount'),
+                        Text('Dernier envoi: ${_lastSendAttempt?.toString() ?? "Aucun"}'),
+                        Text('État de chargement: ${_isLoading ? "En cours" : "Inactif"}'),
+                        const Divider(),
+                        Text(_debugInfo),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Fermer'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -201,7 +284,7 @@ class _PansListScreenState extends State<PansListScreen> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _sendDataToFirebase,
+                    onPressed: _isLoading ? null : _sendDataToSupabase, // Utilise la nouvelle méthode
                     icon: _isLoading 
                       ? const SizedBox(
                           width: 20,

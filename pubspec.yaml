@@ -44,10 +44,12 @@ dependencies:
   http: ^1.1.0  # For API requests
   intl: ^0.18.0  # Add this package for NumberFormat
 
-  # Firebase
-  firebase_core: ^2.24.2
-  cloud_firestore: ^4.14.0
-  firebase_analytics: ^10.8.0 # Optionnel, pour suivre l'usage
+
+  # Supabase
+  supabase_flutter: ^2.0.0
+  
+  # Outils de développement
+  logging: ^1.2.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
