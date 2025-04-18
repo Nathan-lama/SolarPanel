@@ -5,6 +5,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+import java.util.Properties
+
 android {
     namespace = "com.example.solarpanel"
     compileSdk = flutter.compileSdkVersion
@@ -28,6 +30,13 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        val secretsPropsFile = rootProject.file("app/secrets.properties")
+        val secretsProps = Properties()
+        if (secretsPropsFile.exists()) {
+            secretsProps.load(secretsPropsFile.inputStream())
+        }
+        manifestPlaceholders["MAPS_API_KEY"] = secretsProps.getProperty("MAPS_API_KEY", "")
     }
 
     buildTypes {
