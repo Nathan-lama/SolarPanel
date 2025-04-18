@@ -37,30 +37,58 @@ class SupabaseService {
     }
   }
 
-  /// Sauvegarde les données de toit dans la table Supabase
-  static Future<void> saveRoofData(Map<String, dynamic> data) async {
+  /// Sauvegarde les données de toit dans Supabase
+  /// Retourne l'ID du projet créé ou mis à jour
+  static Future<String> saveRoofData(Map<String, dynamic> data, {bool updateExisting = false}) async {
     try {
       developer.log('[SUPABASE] Envoi des données...', name: 'SupabaseService');
-      developer.log('[SUPABASE] Données: $data', name: 'SupabaseService');
       
-      // Créer un nouveau projet
-      final projectData = {
-        'latitude': data['latitude'],
-        'longitude': data['longitude'],
-        'created_at': DateTime.now().toIso8601String(),
-        'name': 'Projet ${DateTime.now().toString().substring(0, 10)}',
-        // Ne pas inclure roof_pans ici car ils seront ajoutés séparément
-      };
+      String? existingProjectId = data['update_to_project'];
+      data.remove('update_to_project'); // Enlever cette clé avant l'envoi
       
-      // Insérer le projet et récupérer son ID
-      final response = await client
-          .from(_tableName)
-          .insert(projectData)
-          .select('id')
-          .single();
+      String projectId;
       
-      final projectId = response['id'];
-      developer.log('[SUPABASE] Projet créé avec ID: $projectId', name: 'SupabaseService');
+      // Si c'est une mise à jour d'un projet existant
+      if (updateExisting && existingProjectId != null) {
+        developer.log('[SUPABASE] Mise à jour du projet existant: $existingProjectId', name: 'SupabaseService');
+        
+        // 1. Supprimer d'abord toutes les données associées à ce projet
+        await _cleanProjectData(existingProjectId);
+        
+        // 2. Mettre à jour le projet principal
+        final projectData = {
+          'latitude': data['latitude'],
+          'longitude': data['longitude'],
+          'updated_at': DateTime.now().toIso8601String(),
+        };
+        
+        await client
+            .from('solar_projects')
+            .update(projectData)
+            .eq('id', existingProjectId);
+            
+        projectId = existingProjectId;
+      } 
+      // Création d'un nouveau projet
+      else {
+        // Créer un nouveau projet
+        final projectData = {
+          'latitude': data['latitude'],
+          'longitude': data['longitude'],
+          'created_at': DateTime.now().toIso8601String(),
+          'name': 'Projet ${DateTime.now().toString().substring(0, 10)}',
+        };
+        
+        // Insérer le projet et récupérer son ID
+        final response = await client
+            .from('solar_projects')
+            .insert(projectData)
+            .select('id')
+            .single();
+        
+        projectId = response['id'];
+        developer.log('[SUPABASE] Nouveau projet créé avec ID: $projectId', name: 'SupabaseService');
+      }
       
       // Maintenant insérer chaque pan de toit avec l'ID du projet
       final List<Map<String, dynamic>> roofPans = List<Map<String, dynamic>>.from(data['roof_pans']);
@@ -98,7 +126,6 @@ class SupabaseService {
               'roof_pan_id': panId,
               'azimuth': measurement['azimuth'],
               'elevation': measurement['elevation'],
-              // 'distance' peut être ajouté si disponible
             };
             
             await client.from('shadow_measurements').insert(measurementEntry);
@@ -107,11 +134,11 @@ class SupabaseService {
       }
       
       developer.log('[SUPABASE] Données envoyées avec succès', name: 'SupabaseService');
-      return;
+      return projectId;
     } catch (e) {
       developer.log('[SUPABASE] Erreur d\'envoi: $e', name: 'SupabaseService', error: e);
       
-      // Fournir des détails sur l'erreur pour le débogage
+      // Fournir un message d'erreur plus convivial
       String errorMessage = 'Erreur lors de l\'envoi des données';
       
       if (e is PostgrestException) {
@@ -122,6 +149,43 @@ class SupabaseService {
       }
       
       throw Exception(errorMessage);
+    }
+  }
+  
+  /// Nettoie toutes les données associées à un projet 
+  /// (pans de toit et mesures d'ombre) avant mise à jour
+  static Future<void> _cleanProjectData(String projectId) async {
+    try {
+      // 1. Obtenir tous les pans associés à ce projet
+      final panResponse = await client
+          .from('roof_pans')
+          .select('id')
+          .eq('project_id', projectId);
+      
+      final List<Map<String, dynamic>> pans = List<Map<String, dynamic>>.from(panResponse);
+      final List<String> panIds = pans.map((p) => p['id'] as String).toList();
+      
+      // 2. Supprimer toutes les mesures d'ombre associées à ces pans
+      if (panIds.isNotEmpty) {
+        await client
+            .from('shadow_measurements')
+            .delete()
+            .filter('roof_pan_id', 'in', panIds);  // Correction: utiliser filter() au lieu de in()
+      }
+      
+      // 3. Supprimer tous les pans associés à ce projet
+      await client
+          .from('roof_pans')
+          .delete()
+          .eq('project_id', projectId);
+      
+      developer.log('[SUPABASE] Nettoyage des données du projet $projectId réussi', 
+                    name: 'SupabaseService');
+    } catch (e) {
+      developer.log('[SUPABASE] Erreur lors du nettoyage: $e', 
+                    name: 'SupabaseService', 
+                    error: e);
+      // Ne pas relancer l'erreur pour ne pas interrompre le processus de mise à jour
     }
   }
 

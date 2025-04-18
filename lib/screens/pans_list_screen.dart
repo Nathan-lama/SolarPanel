@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:developer' as developer;
 import '../models/roof_pan.dart';
+import '../services/supabase_service.dart'; // Remplacer Firebase par Supabase
 import 'orientation_screen.dart';
 import 'inclination_screen.dart';
 import 'obstacles_pan_screen.dart';
 import 'peak_power_screen.dart';
 import 'pan_analysis_screen.dart';
-import '../services/supabase_service.dart'; // Remplacer Firebase par Supabase
 
 class PansListScreen extends StatefulWidget {
   final double latitude;
@@ -33,6 +33,12 @@ class _PansListScreenState extends State<PansListScreen> {
   DateTime? _lastSendAttempt;
   int _sendAttemptCount = 0;
   String _debugInfo = '';
+
+  // Garder une trace de la dernière opération d'envoi réussie
+  List<RoofPan>? _lastSentPans;
+
+  // Variable pour stocker l'ID du projet le plus récent
+  String? _lastProjectId;
 
   // Méthode pour ajouter un nouveau pan
   Future<void> _addNewPan() async {
@@ -87,6 +93,7 @@ class _PansListScreenState extends State<PansListScreen> {
     // Ajout du nouveau pan à la liste
     setState(() {
       _roofPans.add(newPan);
+      _lastSentPans = null; // Reset sent status when adding a new pan
     });
   }
 
@@ -94,6 +101,9 @@ class _PansListScreenState extends State<PansListScreen> {
   void _deletePan(String id) {
     setState(() {
       _roofPans.removeWhere((pan) => pan.id == id);
+      // Conserver l'ID du projet pour mise à jour plutôt que création
+      // mais marquer que les pans ont changé
+      _lastSentPans = null;
     });
   }
 
@@ -126,6 +136,18 @@ class _PansListScreenState extends State<PansListScreen> {
       return;
     }
 
+    // Vérifier si ces pans ont déjà été envoyés exactement tels quels
+    if (_lastSentPans != null && _arePansIdentical(_roofPans, _lastSentPans!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ces données ont déjà été envoyées. Modifiez un pan ou ajoutez-en un nouveau pour envoyer à nouveau.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     if (_isLoading) return;
 
     setState(() {
@@ -152,19 +174,29 @@ class _PansListScreenState extends State<PansListScreen> {
             }).toList() ?? [],
           };
         }).toList(),
+        // Ajout d'une clé pour détecter les mises à jour au même projet
+        'update_to_project': _lastProjectId,
       };
       
       // Afficher les données pour le débogage
       developer.log('[DEBUG] Données à envoyer: $data', name: 'PanListScreen');
       
-      // Envoyer les données à Supabase
-      await SupabaseService.saveRoofData(data);
+      // Envoyer les données à Supabase et récupérer l'ID du projet
+      final projectId = await SupabaseService.saveRoofData(data, updateExisting: _lastProjectId != null);
       
       if (mounted) {
-        setState(() => _debugInfo += '\nSuccès: ${DateTime.now().toString().substring(11, 23)}');
+        setState(() {
+          _lastSentPans = List.from(_roofPans);
+          _lastProjectId = projectId;
+          _debugInfo += '\nSuccès: ${DateTime.now().toString().substring(11, 23)}';
+          _debugInfo += '\nID Projet: $projectId';
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Données envoyées avec succès à Supabase'),
+          SnackBar(
+            content: Text(
+              _lastProjectId != null ? 'Projet mis à jour avec succès' : 'Nouveau projet créé avec succès'
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -189,6 +221,52 @@ class _PansListScreenState extends State<PansListScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  // Vérifier si deux listes de pans sont identiques (comparaison améliorée)
+  bool _arePansIdentical(List<RoofPan> list1, List<RoofPan> list2) {
+    if (list1.length != list2.length) return false;
+    
+    for (int i = 0; i < list1.length; i++) {
+      // Comparer les attributs importants
+      if (list1[i].orientation != list2[i].orientation ||
+          list1[i].inclination != list2[i].inclination ||
+          list1[i].peakPower != list2[i].peakPower ||
+          list1[i].hasObstacles != list2[i].hasObstacles) {
+        return false;
+      }
+      
+      // Comparer les mesures d'ombre si présentes
+      final shadows1 = list1[i].shadowMeasurements;
+      final shadows2 = list2[i].shadowMeasurements;
+      
+      if ((shadows1 == null) != (shadows2 == null)) {
+        return false;
+      }
+      
+      if (shadows1?.length != shadows2?.length) {
+        return false;
+      }
+      
+      // Comparaison détaillée des mesures d'ombres
+      if (shadows1 != null && shadows2 != null) {
+        for (int j = 0; j < shadows1.length; j++) {
+          if (shadows1[j].azimuth != shadows2[j].azimuth || 
+              shadows1[j].elevation != shadows2[j].elevation) {
+            return false;
+          }
+        }
+      }
+    }
+    
+    return true;
+  }
+  
+  // Reset l'état d'envoi lorsque l'utilisateur modifie les pans
+  void _resetSentStatus() {
+    if (_lastSentPans != null && !_arePansIdentical(_roofPans, _lastSentPans!)) {
+      setState(() => _lastSentPans = null);
     }
   }
 
@@ -284,7 +362,18 @@ class _PansListScreenState extends State<PansListScreen> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _sendDataToSupabase, // Utilise la nouvelle méthode
+                    onPressed: _isLoading 
+                      ? null 
+                      : (_lastSentPans != null && _arePansIdentical(_roofPans, _lastSentPans!))
+                        ? () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Ces données ont déjà été envoyées'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                          }
+                        : _sendDataToSupabase,
                     icon: _isLoading 
                       ? const SizedBox(
                           width: 20,
@@ -294,10 +383,18 @@ class _PansListScreenState extends State<PansListScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : const Icon(Icons.cloud_upload),
-                    label: Text(_isLoading ? 'Envoi en cours...' : 'Envoyer les données'),
+                      : (_lastSentPans != null && _arePansIdentical(_roofPans, _lastSentPans!))
+                        ? const Icon(Icons.check)
+                        : const Icon(Icons.cloud_upload),
+                    label: Text(_isLoading 
+                      ? 'Envoi en cours...' 
+                      : (_lastSentPans != null && _arePansIdentical(_roofPans, _lastSentPans!))
+                        ? 'Déjà envoyé'
+                        : 'Envoyer les données'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.secondary,
+                      backgroundColor: (_lastSentPans != null && _arePansIdentical(_roofPans, _lastSentPans!))
+                        ? Colors.grey.shade600
+                        : Theme.of(context).colorScheme.secondary,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: Colors.grey,
                     ),
