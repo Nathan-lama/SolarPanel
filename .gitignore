@@ -44,3 +44,8 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 /android/app/secrets.properties
+
+# Fichiers de configuration avec données sensibles
+.env
+.env.*
+!.env.example

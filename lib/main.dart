@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Charger les variables d'environnement
+  await dotenv.load();
+  
+  // Initialiser Supabase avec les valeurs du fichier .env
   await Supabase.initialize(
-    url: 'https://etaeeuinclewwymorhtx.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0YWVldWluY2xld3d5bW9yaHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ5MTg0MjIsImV4cCI6MjA2MDQ5NDQyMn0.mXNAEdaPMygM3nvlUMbol_azJFv782OVV1amsVBTCLQ',
+    url: dotenv.env['SUPABASE_URL'] ?? '',
+    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
   );
   
   runApp(const MyApp());
