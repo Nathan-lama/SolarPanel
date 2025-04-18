@@ -94,6 +94,7 @@ class _PansListScreenState extends State<PansListScreen> {
     setState(() {
       _roofPans.add(newPan);
       _lastSentPans = null; // Reset sent status when adding a new pan
+      // No need for _resetSentStatus() since we do it directly here
     });
   }
 
@@ -101,9 +102,9 @@ class _PansListScreenState extends State<PansListScreen> {
   void _deletePan(String id) {
     setState(() {
       _roofPans.removeWhere((pan) => pan.id == id);
-      // Conserver l'ID du projet pour mise à jour plutôt que création
-      // mais marquer que les pans ont changé
+      // Conserver l'ID du projet pour mise à jour mais marquer que les pans ont changé
       _lastSentPans = null;
+      // No need for _resetSentStatus() since we do it directly here
     });
   }
 
@@ -263,13 +264,6 @@ class _PansListScreenState extends State<PansListScreen> {
     return true;
   }
   
-  // Reset l'état d'envoi lorsque l'utilisateur modifie les pans
-  void _resetSentStatus() {
-    if (_lastSentPans != null && !_arePansIdentical(_roofPans, _lastSentPans!)) {
-      setState(() => _lastSentPans = null);
-    }
-  }
-
   // Navigation vers l'analyse d'un pan spécifique
   void _navigateToPanAnalysis(RoofPan pan) {
     Navigator.push(

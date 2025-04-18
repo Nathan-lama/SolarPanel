@@ -71,7 +71,7 @@ class SunPathPainter extends CustomPainter {
   void _drawGrid(Canvas canvas) {
     // Style pour les cercles concentriques
     final Paint circlePaint = Paint()
-      ..color = Colors.grey.withOpacity(0.3)
+      ..color = Color.fromRGBO(128, 128, 128, 0.3) // Remplace withOpacity par fromRGBO
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
     
