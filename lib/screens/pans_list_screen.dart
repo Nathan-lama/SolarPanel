@@ -3,7 +3,7 @@ import 'dart:developer' as developer;
 import '../models/roof_pan.dart';
 import '../services/supabase_service.dart'; // Remplacer Firebase par Supabase
 import 'orientation_screen.dart';
-import 'inclination_screen.dart';
+import 'inclination_screen.dart' as inc_screen; // Rename the prefix to avoid conflict
 import 'obstacles_pan_screen.dart';
 import 'peak_power_screen.dart';
 import 'pan_analysis_screen.dart';
@@ -68,7 +68,8 @@ class _PansListScreenState extends State<PansListScreen> {
     final double? inclination = await Navigator.push<double>(
       context,
       MaterialPageRoute(
-        builder: (context) => const InclinationScreen(),
+        // Use the updated prefix name
+        builder: (context) => const inc_screen.InclinationScreen(),
       ),
     );
 

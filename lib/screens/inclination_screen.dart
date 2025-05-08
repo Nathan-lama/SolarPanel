@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 class InclinationScreen extends StatefulWidget {
@@ -15,10 +16,24 @@ class _InclinationScreenState extends State<InclinationScreen> {
   double _currentAngle = 0.0;
   final TextEditingController _manualAngleController = TextEditingController();
   StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
+  bool _isPhoneOnEdge = false;
+  double _calibrationOffset = 0.0;
+  
+  // Filtrage des mesures pour plus de stabilité
+  final List<double> _angleBuffer = [];
+  static const int _bufferSize = 10;
 
   @override
   void initState() {
     super.initState();
+    _manualAngleController.text = "0.0";
+    
+    // Forcer l'orientation paysage
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    
     _startListening();
   }
 
@@ -26,90 +41,203 @@ class _InclinationScreenState extends State<InclinationScreen> {
   void dispose() {
     _accelerometerSubscription?.cancel();
     _manualAngleController.dispose();
+    
+    // Réactiver toutes les orientations
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    
     super.dispose();
   }
 
   void _startListening() {
-    // Utilisation de accelerometerEventStream() au lieu de accelerometerEvents
     _accelerometerSubscription = accelerometerEventStream().listen((AccelerometerEvent event) {
-      if (_autoMeasure) {
-        // Calculer l'angle d'inclinaison
-        double x = event.x;
-        double y = event.y;
-        double z = event.z;
+      if (!_autoMeasure || !mounted) return;
+      
+      // En mode paysage, perpendiculaire à la surface:
+      // X: gauche-droite quand perpendiculaire (avant-arrière en standard)
+      // Y: haut-bas (toujours)
+      // Z: avant-arrière devrait être minimal car perpendiculaire à la surface
+      
+      // Calculer la magnitude totale pour la normalisation
+      double magnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+      
+      // Ratio de l'axe Z (avant-arrière) sur la magnitude totale
+      // Z doit être minimal car le téléphone est perpendiculaire à la surface
+      double zRatio = event.z.abs() / magnitude;
+      
+      // Considérer le téléphone perpendiculaire à la surface quand l'axe Z est minimal
+      bool isPerpendicularToSurface = zRatio < 0.3;
+      
+      if (isPerpendicularToSurface) {
+        // Calculer l'angle uniquement à partir des axes X et Y
+        // L'axe Y est toujours la composante verticale
+        // L'axe X devient horizontal quand le téléphone est perpendiculaire
+        double angleInRadians = atan2(event.y, event.x);
+        double angleInDegrees = angleInRadians * 180 / pi;
         
-        // Angle entre le vecteur gravité et l'axe z
-        double angleInRadians = acos(z / sqrt(x * x + y * y + z * z));
+        // Appliquer l'offset de calibration
+        angleInDegrees -= _calibrationOffset;
         
-        // Convertir en degrés (0° = horizontal, 90° = vertical)
-        double angleInDegrees = 90 - (angleInRadians * 180 / pi);
+        // Ajouter au buffer pour stabiliser la mesure
+        _angleBuffer.add(angleInDegrees);
+        if (_angleBuffer.length > _bufferSize) {
+          _angleBuffer.removeAt(0);
+        }
         
-        // Appliquer un léger filtre pour stabiliser la lecture
+        // Calculer la moyenne pour un affichage stable
+        double smoothedAngle = 0.0;
+        if (_angleBuffer.isNotEmpty) {
+          smoothedAngle = _angleBuffer.reduce((a, b) => a + b) / _angleBuffer.length;
+        }
+        
         setState(() {
-          _currentAngle = double.parse(angleInDegrees.toStringAsFixed(1));
+          _isPhoneOnEdge = true;
+          _currentAngle = double.parse(smoothedAngle.toStringAsFixed(1));
+          if (_autoMeasure) {
+            _manualAngleController.text = _currentAngle.abs().toStringAsFixed(1);
+          }
+        });
+      } else {
+        setState(() {
+          _isPhoneOnEdge = false;
         });
       }
     });
+  }
+  
+  void _calibrate() {
+    if (_isPhoneOnEdge) {
+      // Mémoriser l'angle actuel pour l'utiliser comme offset
+      setState(() {
+        _calibrationOffset = _currentAngle + _calibrationOffset;
+        _angleBuffer.clear();
+        _currentAngle = 0.0;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Calibration effectuée'))
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Impossible de calibrer. Posez le téléphone sur sa tranche'),
+          backgroundColor: Colors.orange,
+        )
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Inclinaison du toit'),
+        title: const Text('Inclinaison'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Calibrer à 0°',
+            onPressed: _calibrate,
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      // Utiliser un layout qui garantit que tous les éléments sont visibles
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Quelle est l\'inclinaison de votre toit ?',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            
-            // Switch pour choisir entre mesure auto et manuelle
-            Row(
-              children: [
-                Checkbox(
-                  value: _autoMeasure,
-                  onChanged: (value) {
-                    setState(() {
-                      _autoMeasure = value ?? true;
-                    });
-                  },
+            // Contenu principal qui prend l'espace disponible
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 5, 10, 0),
+                child: Column(
+                  children: [
+                    // Titre et switch en ligne pour économiser de l'espace
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Inclinaison du pan',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        Checkbox(
+                          visualDensity: VisualDensity.compact,
+                          value: _autoMeasure,
+                          onChanged: (value) {
+                            setState(() {
+                              _autoMeasure = value ?? true;
+                              if (!_autoMeasure) {
+                                _manualAngleController.text = _currentAngle.abs().toStringAsFixed(1);
+                              }
+                            });
+                          },
+                        ),
+                        const Text('Auto', style: TextStyle(fontSize: 13)),
+                      ],
+                    ),
+                    
+                    // Indicateur d'état compact sur la même ligne
+                    if (_autoMeasure)
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _isPhoneOnEdge ? Colors.green.shade50 : Colors.orange.shade50,
+                          border: Border.all(
+                            color: _isPhoneOnEdge ? Colors.green.shade300 : Colors.orange.shade300,
+                            width: 1,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _isPhoneOnEdge ? Icons.check_circle : Icons.info_outline,
+                              color: _isPhoneOnEdge ? Colors.green : Colors.orange,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _isPhoneOnEdge
+                                  ? 'Position correcte'
+                                  : 'Posez sur la tranche',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _isPhoneOnEdge ? Colors.green.shade800 : Colors.orange.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
+                    // Contenu principal selon le mode (prend l'espace restant)
+                    Expanded(
+                      child: _autoMeasure ? _buildAutoMeasureUI() : _buildManualEntryUI(),
+                    ),
+                  ],
                 ),
-                const Text('Mesurer automatiquement'),
-              ],
+              ),
             ),
             
-            const SizedBox(height: 30),
-            
-            // Contenu conditionnel selon le mode
-            _autoMeasure ? _buildAutoMeasureUI() : _buildManualEntryUI(),
-            
-            const Spacer(),
-            
-            // Bouton pour valider l'inclinaison
-            SizedBox(
-              width: double.infinity,
-              height: 50,
+            // Bouton de validation (toujours visible en bas et non scrollable)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 5),
               child: ElevatedButton(
                 onPressed: () {
-                  // Récupérer l'angle choisi
                   final selectedAngle = _autoMeasure 
-                      ? _currentAngle 
-                      : double.tryParse(_manualAngleController.text) ?? 0.0;
-                  
-                  // Retourner à l'écran précédent avec la valeur
+                    ? _currentAngle.abs()
+                    : double.tryParse(_manualAngleController.text)?.abs() ?? 0.0;
                   Navigator.pop(context, selectedAngle);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(45),
                 ),
-                child: const Text('Valider le pan', style: TextStyle(fontSize: 16)),
+                child: const Text('Valider', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -119,161 +247,271 @@ class _InclinationScreenState extends State<InclinationScreen> {
   }
 
   Widget _buildAutoMeasureUI() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // Visualisation de l'angle
-        SizedBox(
-          width: double.infinity,
-          child: Card(
-            elevation: 4,
+    // Simplifier l'interface auto pour qu'elle soit plus compacte
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Angle numérique
+          Text(
+            _isPhoneOnEdge ? '${_currentAngle.abs().toStringAsFixed(1)}°' : '--°',
+            style: const TextStyle(
+              fontSize: 56,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const Text('d\'inclinaison', style: TextStyle(fontSize: 14)),
+          
+          // Illustration améliorée du positionnement
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Transform.rotate(
+                  angle: pi / 2, // Rotation pour montrer le téléphone perpendiculaire
+                  child: Icon(
+                    Icons.phone_android, 
+                    color: _isPhoneOnEdge ? Colors.green : Colors.orange,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'perpendiculaire à la surface',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _isPhoneOnEdge ? Colors.green.shade700 : Colors.orange.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Niveau à bulle (occupant l'espace restant)
+          Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 30.0),
-              child: Column(
-                children: [
-                  const Text(
-                    'Angle mesuré:',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '${_currentAngle.toStringAsFixed(1)}°',
-                    style: const TextStyle(
-                      fontSize: 42,
-                      fontWeight: FontWeight.bold,
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: 4/1, // Force un rapport largeur/hauteur constant
+                  child: CustomPaint(
+                    painter: BubbleLevelPainter(
+                      angle: _currentAngle,
+                      isActive: _isPhoneOnEdge,
+                      primaryColor: Theme.of(context).colorScheme.primary,
                     ),
                   ),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Visualisation graphique de l'inclinaison
-                  Container(
-                    height: 120,
-                    width: 200,
-                    padding: const EdgeInsets.all(10),
-                    child: CustomPaint(
-                      painter: InclinationPainter(angle: _currentAngle),
-                      size: const Size(180, 100),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-        
-        const SizedBox(height: 16),
-        
-        // Texte d'aide
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            // Utiliser une couleur avec valeur alpha directement au lieu de withOpacityec opacity n'est pas disponible
-            color: const Color.fromRGBO(33, 150, 243, 0.1), // Couleur bleue avec alpha à 0.1
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, color: Colors.blue.shade700),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Posez votre téléphone sur le toit ou sur une surface inclinée pour mesurer l\'angle.',
-                  style: TextStyle(fontSize: 14),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildManualEntryUI() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Saisissez l\'angle d\'inclinaison en degrés:',
-          style: TextStyle(fontSize: 16),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _manualAngleController,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+    // Simplifier l'interface manuelle pour qu'elle soit plus compacte
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Angle d\'inclinaison (degrés):'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _manualAngleController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              suffixText: '°',
             ),
-            labelText: 'Angle (degrés)',
-            hintText: 'Ex: 30°',
-            suffixText: '°',
           ),
-        ),
-        const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            // Utiliser une couleur avec valeur alpha directement au lieu de withOpacityec opacity n'est pas disponible
-            color: const Color.fromRGBO(255, 152, 0, 0.1), // Couleur orange avec alpha à 0.1
-            borderRadius: BorderRadius.circular(8),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              '• Toits standards: entre 15° et 45°',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+            ),
           ),
-          child: Row(
-            children: [
-              Icon(Icons.lightbulb_outline, color: Colors.orange.shade700),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'L\'angle d\'inclinaison d\'un toit standard est généralement compris entre 15° et 45°.',
-                  style: TextStyle(fontSize: 14),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-// Peintre personnalisé pour visualiser l'inclinaison
-class InclinationPainter extends CustomPainter {
+// Painter pour le niveau à bulle
+class BubbleLevelPainter extends CustomPainter {
   final double angle;
+  final bool isActive;
+  final Color primaryColor;
   
-  InclinationPainter({required this.angle});
+  BubbleLevelPainter({
+    required this.angle,
+    required this.primaryColor,
+    this.isActive = true,
+  });
   
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.grey.shade800
+    final center = Offset(size.width / 2, size.height / 2);
+    final levelWidth = size.width - 40;
+    
+    // Dessiner le tube du niveau
+    final levelRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: center, width: levelWidth, height: 40),
+      const Radius.circular(20),
+    );
+    
+    final levelPaint = Paint()
+      ..color = Colors.grey.shade200
+      ..style = PaintingStyle.fill;
+    
+    final levelBorderPaint = Paint()
+      ..color = Colors.grey.shade400
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     
-    // Dessiner la ligne horizontale (sol)
+    canvas.drawRRect(levelRect, levelPaint);
+    canvas.drawRRect(levelRect, levelBorderPaint);
+    
+    // Dessiner les graduations
+    final centerMarkPaint = Paint()
+      ..color = Colors.grey
+      ..strokeWidth = 2;
+    
+    // Marque centrale
     canvas.drawLine(
-      Offset(0, size.height * 0.8),
-      Offset(size.width, size.height * 0.8),
-      paint,
+      Offset(center.dx, center.dy - 20),
+      Offset(center.dx, center.dy + 20),
+      centerMarkPaint,
     );
     
-    // Calculer les points pour la ligne inclinée (toit)
-    final double radians = (90 - angle) * pi / 180;
-    final double length = size.width * 0.7;
-    final Offset start = Offset(size.width * 0.15, size.height * 0.8);
-    final Offset end = Offset(
-      start.dx + cos(radians) * length,
-      start.dy - sin(radians) * length,
-    );
+    // Graduations latérales
+    for (int i = 1; i <= 6; i++) {
+      // Facteur de sensibilité
+      double sensitivity = 2.5;
+      final offset = i * 10.0 * sensitivity;
+      
+      if (center.dx + offset <= center.dx + levelWidth / 2 - 10) {
+        final markHeight = i % 3 == 0 ? 16.0 : 10.0;
+        
+        // Graduation droite
+        canvas.drawLine(
+          Offset(center.dx + offset, center.dy - markHeight / 2),
+          Offset(center.dx + offset, center.dy + markHeight / 2),
+          centerMarkPaint,
+        );
+        
+        // Texte de graduation
+        if (i % 3 == 0) {
+          final textPainter = TextPainter(
+            text: TextSpan(
+              text: '${i * 10}°',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 10),
+            ),
+            textDirection: TextDirection.ltr,
+            textAlign: TextAlign.center,
+          );
+          textPainter.layout();
+          textPainter.paint(
+            canvas, 
+            Offset(center.dx + offset - textPainter.width / 2, center.dy + 12),
+          );
+        }
+      }
+      
+      if (center.dx - offset >= center.dx - levelWidth / 2 + 10) {
+        final markHeight = i % 3 == 0 ? 16.0 : 10.0;
+        
+        // Graduation gauche
+        canvas.drawLine(
+          Offset(center.dx - offset, center.dy - markHeight / 2),
+          Offset(center.dx - offset, center.dy + markHeight / 2),
+          centerMarkPaint,
+        );
+        
+        // Texte de graduation
+        if (i % 3 == 0) {
+          final textPainter = TextPainter(
+            text: TextSpan(
+              text: '${i * 10}°',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 10),
+            ),
+            textDirection: TextDirection.ltr,
+            textAlign: TextAlign.center,
+          );
+          textPainter.layout();
+          textPainter.paint(
+            canvas, 
+            Offset(center.dx - offset - textPainter.width / 2, center.dy + 12),
+          );
+        }
+      }
+    }
     
-    // Dessiner la ligne inclinée
-    final paintRoof = Paint()
-      ..color = Colors.blue
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-    
-    canvas.drawLine(start, end, paintRoof);
+    if (isActive) {
+      // Calculer la position de la bulle
+      final double sensitivity = 2.5;
+      // Afficher la bulle en fonction de l'angle, mais montrer le degré exact en positif
+      final double bubbleOffset = angle * sensitivity; // Garder le signe pour le mouvement visuel
+      final double constrainedOffset = bubbleOffset.clamp(-levelWidth / 2 + 20, levelWidth / 2 - 20);
+      final bubbleCenter = Offset(center.dx + constrainedOffset, center.dy);
+      
+      // Dessiner l'ombre de la bulle avec un alpha en constante
+      final shadowPaint = Paint()
+        ..color = const Color.fromRGBO(0, 0, 0, 0.1) // Utiliser fromRGBO au lieu de withOpacity
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      
+      canvas.drawCircle(bubbleCenter, 18, shadowPaint);
+      
+      // Dessiner la bulle
+      final bubblePaint = Paint()
+        ..color = primaryColor;
+      
+      canvas.drawCircle(bubbleCenter, 16, bubblePaint);
+      
+      // Ajouter un reflet pour l'effet 3D
+      final highlightPaint = Paint()
+        ..color = const Color.fromRGBO(255, 255, 255, 0.5); // Remplacer withOpacity par fromRGBO
+      
+      canvas.drawCircle(
+        Offset(bubbleCenter.dx - 5, bubbleCenter.dy - 5),
+        6,
+        highlightPaint,
+      );
+      
+      // Indicateur de précision - basé sur la valeur absolue
+      final indicatorColor = angle.abs() < 1 
+          ? Colors.green 
+          : angle.abs() < 5 
+              ? Colors.orange 
+              : Colors.red;
+      
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(center.dx, center.dy + 30),
+          width: 40,
+          height: 4,
+        ),
+        Paint()..color = indicatorColor,
+      );
+    } else {
+      // Bulle inactive au centre
+      final inactivePaint = Paint()
+        ..color = Colors.grey.shade400;
+      
+      canvas.drawCircle(center, 16, inactivePaint);
+    }
   }
   
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant BubbleLevelPainter oldDelegate) {
+    return oldDelegate.angle != angle || 
+           oldDelegate.isActive != isActive || 
+           oldDelegate.primaryColor != primaryColor;
+  }
 }

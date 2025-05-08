@@ -416,10 +416,11 @@ class _CompassNeedlePainter extends CustomPainter {
   
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill
-      ..strokeCap = StrokeCap.round;
+    // Remove the unused 'paint' variable
+    // final paint = Paint() - this line is unused and should be removed
+    //   ..color = color
+    //   ..style = PaintingStyle.fill
+    //   ..strokeCap = StrokeCap.round;
       
     // Crée un effet de brillance avec un dégradé
     final paintGradient = Paint()
@@ -490,11 +491,7 @@ class _CompassDialPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
     
-    // Peinture pour les graduations
-    final tickPaint = Paint()
-      ..color = Colors.grey.shade600
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+    // Supprimer la variable paint inutilisée
     
     // Dessiner cercle intérieur décoratif
     final circlePaint = Paint()
@@ -523,7 +520,8 @@ class _CompassDialPainter extends CustomPainter {
       );
       
       // Dessiner les graduations comme de simples lignes
-      final tickPaint = Paint()
+      // Utiliser directement la variable au lieu de la stocker dans une variable inutilisée
+      final markPaint = Paint()
         ..color = i % 9 == 0 ? Colors.black87 : Colors.grey.shade500
         ..strokeWidth = tickWidth;
         
@@ -533,7 +531,7 @@ class _CompassDialPainter extends CustomPainter {
       canvas.drawLine(
         Offset.zero, 
         Offset(0, -tickLength), 
-        tickPaint
+        markPaint // Utiliser markPaint directement
       );
       canvas.restore();
     }
