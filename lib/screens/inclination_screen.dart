@@ -42,12 +42,10 @@ class _InclinationScreenState extends State<InclinationScreen> {
     _accelerometerSubscription?.cancel();
     _manualAngleController.dispose();
     
-    // Réactiver toutes les orientations
+    // Cette ligne peut rester, mais elle sera déjà appliquée avant la navigation
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
     ]);
     
     super.dispose();
@@ -227,10 +225,22 @@ class _InclinationScreenState extends State<InclinationScreen> {
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 5),
               child: ElevatedButton(
                 onPressed: () {
+                  // Basculer en mode portrait AVANT de naviguer pour une transition invisible
+                  SystemChrome.setPreferredOrientations([
+                    DeviceOrientation.portraitUp,
+                    DeviceOrientation.portraitDown,
+                  ]);
+                  
+                  // Attendre un très court instant pour que l'orientation soit appliquée
+                  // avant la navigation
                   final selectedAngle = _autoMeasure 
                     ? _currentAngle.abs()
                     : double.tryParse(_manualAngleController.text)?.abs() ?? 0.0;
-                  Navigator.pop(context, selectedAngle);
+                  
+                  // Navigation avec une microseconde de délai pour permettre à l'orientation de s'appliquer
+                  Future.delayed(const Duration(milliseconds: 1), () {
+                    if (mounted) Navigator.pop(context, selectedAngle);
+                  });
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
