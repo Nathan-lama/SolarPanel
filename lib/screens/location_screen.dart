@@ -2,11 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:geocoding/geocoding.dart'; // Ajouter ce package pour la géolocalisation d'adresses
+import 'package:geocoding/geocoding.dart';
 import 'pans_list_screen.dart';
 
 class LocationScreen extends StatefulWidget {
-  const LocationScreen({super.key});
+  // Ajouter les paramètres pour les informations client
+  final String? clientName;
+  final String? clientSurname;
+  final String? clientEmail;
+  final String? clientAddress;
+  final String? clientPhone;
+  
+  const LocationScreen({
+    super.key,
+    this.clientName,
+    this.clientSurname,
+    this.clientEmail,
+    this.clientAddress,
+    this.clientPhone,
+  });
 
   @override
   State<LocationScreen> createState() => _LocationScreenState();
@@ -205,6 +219,11 @@ class _LocationScreenState extends State<LocationScreen> {
           builder: (context) => PansListScreen(
             latitude: _currentPosition!.latitude,
             longitude: _currentPosition!.longitude,
+            clientName: widget.clientName ?? '',
+            clientSurname: widget.clientSurname ?? '',
+            clientEmail: widget.clientEmail,
+            clientAddress: widget.clientAddress,
+            clientPhone: widget.clientPhone,
           ),
         ),
       );

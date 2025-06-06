@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:developer' as developer;
 import '../models/roof_pan.dart';
-import '../services/supabase_service.dart'; // Remplacer Firebase par Supabase
+import '../services/supabase_service.dart';
+import '../services/auth_service.dart';
 import 'orientation_screen.dart';
-import 'inclination_screen.dart' as inc_screen; // Rename the prefix to avoid conflict
+import 'inclination_screen.dart' as inc_screen;
 import 'obstacles_pan_screen.dart';
 import 'peak_power_screen.dart';
 import 'pan_analysis_screen.dart';
@@ -12,10 +13,22 @@ class PansListScreen extends StatefulWidget {
   final double latitude;
   final double longitude;
   
+  // Ajouter les paramètres pour les informations client
+  final String clientName;
+  final String clientSurname;
+  final String? clientEmail;
+  final String? clientAddress;
+  final String? clientPhone;
+  
   const PansListScreen({
     super.key, 
     required this.latitude, 
-    required this.longitude
+    required this.longitude,
+    required this.clientName,
+    required this.clientSurname,
+    this.clientEmail,
+    this.clientAddress,
+    this.clientPhone,
   });
 
   @override
@@ -31,14 +44,8 @@ class _PansListScreenState extends State<PansListScreen> {
 
   // Variables pour le débogage
   DateTime? _lastSendAttempt;
-  int _sendAttemptCount = 0;
-  String _debugInfo = '';
-
-  // Garder une trace de la dernière opération d'envoi réussie
-  List<RoofPan>? _lastSentPans;
-
-  // Variable pour stocker l'ID du projet le plus récent
-  String? _lastProjectId;
+  final int _sendAttemptCount = 0; // Rendu final car la valeur n'est jamais modifiée
+  final String _debugInfo = ''; // Rendu final car la valeur n'est jamais modifiée
 
   // Méthode pour ajouter un nouveau pan
   Future<void> _addNewPan() async {
@@ -94,8 +101,6 @@ class _PansListScreenState extends State<PansListScreen> {
     // Ajout du nouveau pan à la liste
     setState(() {
       _roofPans.add(newPan);
-      _lastSentPans = null; // Reset sent status when adding a new pan
-      // No need for _resetSentStatus() since we do it directly here
     });
   }
 
@@ -103,168 +108,9 @@ class _PansListScreenState extends State<PansListScreen> {
   void _deletePan(String id) {
     setState(() {
       _roofPans.removeWhere((pan) => pan.id == id);
-      // Conserver l'ID du projet pour mise à jour mais marquer que les pans ont changé
-      _lastSentPans = null;
-      // No need for _resetSentStatus() since we do it directly here
     });
   }
 
-  // Méthode mise à jour pour envoyer les données à Supabase
-  Future<void> _sendDataToSupabase() async {
-    // Déboguer les appels multiples
-    final now = DateTime.now();
-    _sendAttemptCount++;
-    
-    developer.log(
-      '[ENVOI_DEBUG] Tentative #$_sendAttemptCount - ${now.hour}:${now.minute}:${now.second}.${now.millisecond}',
-      name: 'PanListScreen'
-    );
-    
-    // Protection contre les clics rapides
-    if (_lastSendAttempt != null && now.difference(_lastSendAttempt!).inSeconds < 2) {
-      developer.log(
-        '[ENVOI_DEBUG] Tentative ignorée - trop rapprochée (${now.difference(_lastSendAttempt!).inMilliseconds}ms)',
-        name: 'PanListScreen'
-      );
-      return;
-    }
-    
-    _lastSendAttempt = now;
-    
-    if (_roofPans.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez ajouter au moins un pan de toit')),
-      );
-      return;
-    }
-
-    // Vérifier si ces pans ont déjà été envoyés exactement tels quels
-    if (_lastSentPans != null && _arePansIdentical(_roofPans, _lastSentPans!)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ces données ont déjà été envoyées. Modifiez un pan ou ajoutez-en un nouveau pour envoyer à nouveau.'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-      _debugInfo = 'Début envoi: ${DateTime.now().toString().substring(11, 23)}';
-    });
-    
-    try {
-      // Créer un objet contenant toutes les informations avec le bon format
-      final data = {
-        'latitude': widget.latitude,
-        'longitude': widget.longitude,
-        'timestamp': DateTime.now().toIso8601String(),
-        'roof_pans': _roofPans.map((pan) {
-          // S'assurer que toutes les clés nécessaires sont présentes
-          return {
-            'peakPower': pan.peakPower,
-            'inclination': pan.inclination,
-            'orientation': pan.orientation,
-            'hasObstacles': pan.hasObstacles,
-            'shadowMeasurements': pan.shadowMeasurements?.map((measurement) => {
-              'azimuth': measurement.azimuth,
-              'elevation': measurement.elevation,
-            }).toList() ?? [],
-          };
-        }).toList(),
-        // Ajout d'une clé pour détecter les mises à jour au même projet
-        'update_to_project': _lastProjectId,
-      };
-      
-      // Afficher les données pour le débogage
-      developer.log('[DEBUG] Données à envoyer: $data', name: 'PanListScreen');
-      
-      // Envoyer les données à Supabase et récupérer l'ID du projet
-      final projectId = await SupabaseService.saveRoofData(data, updateExisting: _lastProjectId != null);
-      
-      if (mounted) {
-        setState(() {
-          _lastSentPans = List.from(_roofPans);
-          _lastProjectId = projectId;
-          _debugInfo += '\nSuccès: ${DateTime.now().toString().substring(11, 23)}';
-          _debugInfo += '\nID Projet: $projectId';
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _lastProjectId != null ? 'Projet mis à jour avec succès' : 'Nouveau projet créé avec succès'
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      // Amélioration de la gestion des erreurs pour le débogage
-      String errorMessage = e.toString();
-      
-      developer.log('[ENVOI_DEBUG] Erreur: $errorMessage', name: 'PanListScreen', error: e);
-      
-      if (mounted) {
-        setState(() => _debugInfo += '\nErreur: ${DateTime.now().toString().substring(11, 23)} - $errorMessage');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: $errorMessage'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5), // Plus de temps pour lire l'erreur
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  // Vérifier si deux listes de pans sont identiques (comparaison améliorée)
-  bool _arePansIdentical(List<RoofPan> list1, List<RoofPan> list2) {
-    if (list1.length != list2.length) return false;
-    
-    for (int i = 0; i < list1.length; i++) {
-      // Comparer les attributs importants
-      if (list1[i].orientation != list2[i].orientation ||
-          list1[i].inclination != list2[i].inclination ||
-          list1[i].peakPower != list2[i].peakPower ||
-          list1[i].hasObstacles != list2[i].hasObstacles) {
-        return false;
-      }
-      
-      // Comparer les mesures d'ombre si présentes
-      final shadows1 = list1[i].shadowMeasurements;
-      final shadows2 = list2[i].shadowMeasurements;
-      
-      if ((shadows1 == null) != (shadows2 == null)) {
-        return false;
-      }
-      
-      if (shadows1?.length != shadows2?.length) {
-        return false;
-      }
-      
-      // Comparaison détaillée des mesures d'ombres
-      if (shadows1 != null && shadows2 != null) {
-        for (int j = 0; j < shadows1.length; j++) {
-          if (shadows1[j].azimuth != shadows2[j].azimuth || 
-              shadows1[j].elevation != shadows2[j].elevation) {
-            return false;
-          }
-        }
-      }
-    }
-    
-    return true;
-  }
-  
   // Navigation vers l'analyse d'un pan spécifique
   void _navigateToPanAnalysis(RoofPan pan) {
     Navigator.push(
@@ -277,6 +123,101 @@ class _PansListScreenState extends State<PansListScreen> {
         ),
       ),
     );
+  }
+
+  // Méthode fusionnée pour envoyer les données et terminer l'analyse
+  Future<void> _finishAnalysisAndSave() async {
+    if (_roofPans.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez ajouter au moins un pan de toit'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Obtenir l'utilisateur actuel
+      final currentUser = AuthService.getCurrentUser();
+      
+      if (currentUser == null) {
+        throw Exception('Vous devez être connecté pour sauvegarder une analyse');
+      }
+
+      // Créer un objet contenant toutes les informations avec le bon format
+      final data = {
+        'latitude': widget.latitude,
+        'longitude': widget.longitude,
+        'timestamp': DateTime.now().toIso8601String(),
+        'name': '${widget.clientName} ${widget.clientSurname}',
+        'client_name': widget.clientName,
+        'client_surname': widget.clientSurname,
+        'client_email': widget.clientEmail,
+        'client_phone': widget.clientPhone,
+        'user_id': currentUser.id,
+        'roof_pans': _roofPans.map((pan) {
+          return {
+            'peakPower': pan.peakPower,
+            'inclination': pan.inclination,
+            'orientation': pan.orientation,
+            'hasObstacles': pan.hasObstacles,
+            'shadowMeasurements': pan.shadowMeasurements?.map((measurement) => {
+              'azimuth': measurement.azimuth,
+              'elevation': measurement.elevation,
+            }).toList() ?? [],
+          };
+        }).toList(),
+      };
+
+      developer.log('[PANS_LIST] Sauvegarde des données: $data', name: 'PansListScreen');
+
+      // Envoyer à Supabase
+      final projectId = await SupabaseService.saveRoofData(data);
+      
+      developer.log('[PANS_LIST] Projet sauvegardé avec ID: $projectId', name: 'PansListScreen');
+
+      // Vérification du montage avant d'utiliser le BuildContext
+      if (!mounted) return;
+
+      // Afficher un message de succès
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Analyse sauvegardée avec succès ! ID: $projectId'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      // Attendre un peu pour que le message soit visible
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Nouvelle vérification du montage après attente
+      if (!mounted) return;
+
+      // Retourner au tableau de bord (écran d'accueil)
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (e) {
+      developer.log('[PANS_LIST] Erreur de sauvegarde: $e', name: 'PansListScreen', error: e);
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la sauvegarde: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -320,6 +261,9 @@ class _PansListScreenState extends State<PansListScreen> {
       ),
       body: Column(
         children: [
+          // Affichage des informations client
+          _buildClientInfoCard(),
+          
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
@@ -335,67 +279,85 @@ class _PansListScreenState extends State<PansListScreen> {
                 : _buildPansList(),
           ),
           
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: _addNewPan,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Ajouter un pan'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Colors.white,
+          // Boutons d'action mis à jour
+          _buildActionButtons(),
+        ],
+      ),
+    );
+  }
+  
+  // Nouveau widget pour afficher les informations client
+  Widget _buildClientInfoCard() {
+    return Card(
+      margin: const EdgeInsets.all(16.0),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Client: ${widget.clientName} ${widget.clientSurname}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            if (widget.clientEmail != null && widget.clientEmail!.isNotEmpty)
+              Text('Email: ${widget.clientEmail}'),
+            if (widget.clientPhone != null && widget.clientPhone!.isNotEmpty)
+              Text('Téléphone: ${widget.clientPhone}'),
+            if (widget.clientAddress != null && widget.clientAddress!.isNotEmpty)
+              Text('Adresse: ${widget.clientAddress}'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Refactorisation des boutons d'action en bas d'écran
+  Widget _buildActionButtons() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _addNewPan,
+              icon: const Icon(Icons.add),
+              label: const Text('Ajouter un pan'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Bouton fusionné "Terminer l'analyse"
+          SizedBox(
+            width: double.infinity,
+            height: 55,
+            child: ElevatedButton.icon(
+              onPressed: _isLoading ? null : _finishAnalysisAndSave,
+              icon: _isLoading 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading 
-                      ? null 
-                      : (_lastSentPans != null && _arePansIdentical(_roofPans, _lastSentPans!))
-                        ? () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Ces données ont déjà été envoyées'),
-                                backgroundColor: Colors.orange,
-                              ),
-                            );
-                          }
-                        : _sendDataToSupabase,
-                    icon: _isLoading 
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : (_lastSentPans != null && _arePansIdentical(_roofPans, _lastSentPans!))
-                        ? const Icon(Icons.check)
-                        : const Icon(Icons.cloud_upload),
-                    label: Text(_isLoading 
-                      ? 'Envoi en cours...' 
-                      : (_lastSentPans != null && _arePansIdentical(_roofPans, _lastSentPans!))
-                        ? 'Déjà envoyé'
-                        : 'Envoyer les données'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: (_lastSentPans != null && _arePansIdentical(_roofPans, _lastSentPans!))
-                        ? Colors.grey.shade600
-                        : Theme.of(context).colorScheme.secondary,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.grey,
-                    ),
-                  ),
-                ),
-              ],
+                  )
+                : const Icon(Icons.check_circle),
+              label: Text(_isLoading 
+                ? 'Sauvegarde en cours...' 
+                : 'Terminer l\'analyse'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey,
+              ),
             ),
           ),
         ],

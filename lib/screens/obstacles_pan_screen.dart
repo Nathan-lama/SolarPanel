@@ -1,12 +1,9 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:camera/camera.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../models/roof_pan.dart';
 import '../models/shadow_measurement.dart';
 import 'shadow_chart_screen.dart';
@@ -145,38 +142,7 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
     // Suppression de la notification SnackBar pour ne pas gêner l'utilisation du bouton
     // La mise à jour visuelle de la liste des mesures est un feedback suffisant
   }
-  
-  Future<void> _exportToCsv() async {
-    if (_measurements.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Aucune mesure à exporter')),
-      );
-      return;
-    }
-    
-    // Format brut sans en-têtes ni annotations
-    StringBuffer csvContent = StringBuffer();
-    
-    // Trier les mesures par azimut
-    final sortedMeasurements = [..._measurements];
-    sortedMeasurements.sort((a, b) => a.azimuth.compareTo(b.azimuth));
-    
-    // Ajouter uniquement les valeurs d'élévation
-    for (var measurement in sortedMeasurements) {
-      // Écrire uniquement la valeur d'élévation
-      csvContent.writeln(measurement.elevation.toStringAsFixed(1));
-    }
-    
-    // Sauvegarder dans un fichier temporaire
-    final directory = await getTemporaryDirectory();
-    final filename = 'horizon_${DateTime.now().millisecondsSinceEpoch ~/ 1000}.csv';
-    final path = '${directory.path}/$filename';
-    final File file = File(path);
-    await file.writeAsString(csvContent.toString());
-    
-    // Partager le fichier
-    await Share.shareXFiles([XFile(path)], text: 'Données horizon');
-  }
+    // Fonction supprimée pour simplifier l'interface
   
   void _viewChart() {
     if (_measurements.isEmpty) {
@@ -216,8 +182,7 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
     _cameraController?.dispose();
     super.dispose();
   }
-  
-  @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
@@ -237,15 +202,22 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
             // Liste des mesures
             _buildMeasurementsList(),
             
-            // Boutons d'action
-            _buildBottomControls(),
+            // Bouton "Graphique" en bas
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10.0, top: 6.0),
+              child: _buildActionButton(
+                'Graphique',
+                Icons.pie_chart,
+                Colors.blue.shade700,
+                _viewChart,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
-  
-  // Nouveau widget pour la vue caméra (qui était précédemment _buildCameraBackground)
+    // Nouveau widget pour la vue caméra (qui était précédemment _buildCameraBackground)
   Widget _buildCameraView() {
     if (!_isCameraInitialized) {
       return Container(
@@ -404,9 +376,85 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
                               ),
                             ),
                           ],
+                        ),                      ),
+                    ),
+                    
+                    // Bouton "Mesurer" flottant sur l'écran caméra (semi-transparent)
+                    Positioned(
+                      bottom: 50,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: GestureDetector(
+                          onTap: _addMeasurement,
+                          child: Container(
+                            width: 150,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade700.withAlpha(179), // Correction: withOpacity -> withAlpha
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(
+                                color: Colors.white.withAlpha(204), // Correction: withOpacity -> withAlpha
+                                width: 3,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha(77), // Correction: withOpacity -> withAlpha
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.add_location_alt,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'MESURER',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
+                    
+                    // Ajout d'une instruction textuelle au-dessus du bouton
+                    Positioned(
+                      bottom: 120,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withAlpha(128), // Remplacé withOpacity(0.5) par withAlpha(128)
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'Pointez vers les obstacles et appuyez sur MESURER',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ),
+                    
                   ],
                 );
               },
@@ -652,49 +700,6 @@ class _ObstaclesPanScreenState extends State<ObstaclesPanScreen> {
                 );
               },
             ),
-          ),
-        ],
-      ),
-    );
-  }
-  
-  Widget _buildBottomControls() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [
-            Colors.black.withAlpha(204),
-            Colors.transparent,
-          ],
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          // Bouton "CSV" maintenant en première position
-          _buildActionButton(
-            'CSV',
-            Icons.file_download,
-            Colors.blueGrey.shade700,
-            _exportToCsv,
-          ),
-          
-          // Bouton "Mesurer" maintenant en deuxième position
-          _buildActionButton(
-            'Mesurer',
-            Icons.add_location_alt,
-            Colors.orange.shade700,
-            _addMeasurement,
-          ),
-          
-          _buildActionButton(
-            'Graphique',
-            Icons.pie_chart,
-            Colors.blue.shade700,
-            _viewChart,
           ),
         ],
       ),

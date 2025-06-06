@@ -11,45 +11,70 @@ class ShadowChartScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Visualisation des masques d\'ombre'),
+        title: const Text('Masques d\'ombre'),
+        centerTitle: true,
+        elevation: 0,
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Diagramme polaire (${measurements.length} mesures)',
-              style: Theme.of(context).textTheme.titleMedium,
-              textAlign: TextAlign.center,
+          // Diagramme prenant tout l'espace
+          Positioned.fill(
+            child: CustomPaint(
+              painter: PolarChartPainter(measurements),
+              size: Size.infinite,
             ),
           ),
           
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: CustomPaint(
-                painter: PolarChartPainter(measurements),
-                size: Size.infinite,
+          // Compteur de mesures en haut
+          Positioned(
+            top: 10,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(153), // Remplacé withOpacity(0.6) par withAlpha(153)
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${measurements.length} mesures',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ),
           
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
+          // Légende minimaliste au bas de l'écran
+          Positioned(
+            bottom: 10,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                width: 300,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(153), // Remplacé withOpacity(0.6) par withAlpha(153)
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: const [
                     Text(
-                      'Comment lire ce graphique :',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      'N = 0° | E = 90° | S = 180° | O = 270°',
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                      textAlign: TextAlign.center,
                     ),
-                    SizedBox(height: 8),
-                    Text('• L\'angle représente l\'azimut (0° = Nord, 90° = Est, etc.)'),
-                    Text('• La distance du centre représente l\'élévation (90° au centre, 0° au bord)'),
-                    Text('• Chaque point rouge représente une mesure d\'obstacle'),
+                    SizedBox(height: 4),
+                    Text(
+                      'Centre = 90° élévation | Bord = 0° élévation',
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
               ),
