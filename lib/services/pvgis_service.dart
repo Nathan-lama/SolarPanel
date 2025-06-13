@@ -202,4 +202,43 @@ class PVGISService {
     
     return horizonValues;
   }
+
+  static Future<Map<String, dynamic>> fetchSolarData(double latitude, double longitude) async {
+    // Déterminer automatiquement la bonne base de données en fonction des coordonnées
+    String database = _selectAppropriateDatabase(latitude, longitude);
+    
+    final url = Uri.parse(
+      'https://re.jrc.ec.europa.eu/api/v5_2/PVcalc?'
+      'lat=$latitude&lon=$longitude'
+      '&peakpower=1&loss=14'
+      '&mountingplace=free'
+      '&angle=35&aspect=0'
+      '&outputformat=json'
+      '&database=$database' // Spécifier explicitement la base de données
+    );
+
+    final response = await http.get(url);
+    
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Erreur PVGIS: ${response.body}');
+    }
+  }
+  
+  // Méthode pour sélectionner la base de données appropriée
+  static String _selectAppropriateDatabase(double latitude, double longitude) {
+    // Amériques (NSRDB)
+    if (longitude >= -180 && longitude <= -25 && latitude >= -60 && latitude <= 60) {
+      return 'PVGIS-NSRDB';
+    } 
+    // Europe, Afrique, partie de l'Asie (SARAH)
+    else if (longitude >= -15 && longitude <= 70 && latitude >= -60 && latitude <= 65) {
+      return 'PVGIS-SARAH';
+    } 
+    // Pour le reste du monde, utiliser ERA5
+    else {
+      return 'PVGIS-ERA5';
+    }
+  }
 }

@@ -416,6 +416,28 @@ class _PansListScreenState extends State<PansListScreen> {
             ),
           ),
           direction: DismissDirection.endToStart,
+          confirmDismiss: (direction) async {
+            // Ajouter une confirmation avant suppression
+            return await showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: const Text('Confirmation'),
+                  content: const Text('Êtes-vous sûr de vouloir supprimer ce pan de toit ?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('ANNULER'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('SUPPRIMER'),
+                    ),
+                  ],
+                );
+              }
+            );
+          },
           onDismissed: (direction) {
             _deletePan(pan.id);
             ScaffoldMessenger.of(context).showSnackBar(
@@ -444,7 +466,39 @@ class _PansListScreenState extends State<PansListScreen> {
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
                     tooltip: 'Supprimer ce pan',
-                    onPressed: () => _deletePan(pan.id),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: const Text('Confirmation'),
+                            content: const Text('Êtes-vous sûr de vouloir supprimer ce pan de toit ?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text('ANNULER'),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  _deletePan(pan.id);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Pan ${index + 1} supprimé'),
+                                      backgroundColor: Colors.red.shade700,
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                                child: const Text('SUPPRIMER', 
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
                   ),
                 ],
               ),

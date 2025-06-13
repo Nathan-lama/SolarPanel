@@ -257,7 +257,6 @@ class _InclinationScreenState extends State<InclinationScreen> {
   }
 
   Widget _buildAutoMeasureUI() {
-    // Simplifier l'interface auto pour qu'elle soit plus compacte
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -280,7 +279,7 @@ class _InclinationScreenState extends State<InclinationScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Transform.rotate(
-                  angle: pi / 2, // Rotation pour montrer le téléphone perpendiculaire
+                  angle: pi / 2,
                   child: Icon(
                     Icons.phone_android, 
                     color: _isPhoneOnEdge ? Colors.green : Colors.orange,
@@ -299,13 +298,13 @@ class _InclinationScreenState extends State<InclinationScreen> {
             ),
           ),
           
-          // Niveau à bulle (occupant l'espace restant)
+          // Niveau à bulle (occupant l'espace restant) - MODIFIÉ POUR ÊTRE PLUS GRAND
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Center(
                 child: AspectRatio(
-                  aspectRatio: 4/1, // Force un rapport largeur/hauteur constant
+                  aspectRatio: 8/1,
                   child: CustomPaint(
                     painter: BubbleLevelPainter(
                       angle: _currentAngle,
@@ -368,7 +367,7 @@ class BubbleLevelPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final levelWidth = size.width - 40;
+    final levelWidth = size.width - 60; // Augmenté la largeur totale du niveau
     
     // Dessiner le tube du niveau
     final levelRect = RRect.fromRectAndRadius(
@@ -400,10 +399,10 @@ class BubbleLevelPainter extends CustomPainter {
       centerMarkPaint,
     );
     
-    // Graduations latérales
-    for (int i = 1; i <= 6; i++) {
+    // Graduations latérales - Modifier pour avoir plus de graduations visibles
+    for (int i = 1; i <= 9; i++) { // Augmenté de 6 à 9 graduations de chaque côté
       // Facteur de sensibilité
-      double sensitivity = 2.5;
+      double sensitivity = 2.0; // Réduit de 2.5 à 2.0 pour voir plus de graduations
       final offset = i * 10.0 * sensitivity;
       
       if (center.dx + offset <= center.dx + levelWidth / 2 - 10) {
@@ -465,7 +464,7 @@ class BubbleLevelPainter extends CustomPainter {
     
     if (isActive) {
       // Calculer la position de la bulle
-      final double sensitivity = 2.5;
+      final double sensitivity = 2.0; // Réduit de 2.5 à 2.0 pour être cohérent
       // Afficher la bulle en fonction de l'angle, mais montrer le degré exact en positif
       final double bubbleOffset = angle * sensitivity; // Garder le signe pour le mouvement visuel
       final double constrainedOffset = bubbleOffset.clamp(-levelWidth / 2 + 20, levelWidth / 2 - 20);
