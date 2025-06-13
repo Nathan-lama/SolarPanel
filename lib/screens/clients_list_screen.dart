@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
 import '../services/auth_service.dart';
+import 'client_details_screen.dart';
 import 'dart:developer' as developer;
 
 class ClientsListScreen extends StatefulWidget {
@@ -128,7 +129,7 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
           final project = _projects[index];
           return _buildProjectCard(project);
         },
-      ),
+      )
     );
   }
 
@@ -180,7 +181,6 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
 
   Widget _buildProjectCard(Map<String, dynamic> project) {
     final projectName = project['name'] ?? 'Client sans nom';
-    // Suppression de la variable non utilisée fullName
     final clientEmail = project['client_email'] ?? '';
     final clientPhone = project['client_phone'] ?? '';
     
@@ -203,97 +203,108 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // En-tête avec nom et date
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  child: Text(
-                    projectName.isNotEmpty ? projectName.substring(0, 1).toUpperCase() : '?',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        projectName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      Text(
-                        'Créé le $formattedDate',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: Colors.grey.shade400,
-                ),
-              ],
+      child: InkWell(  // Ajouter InkWell pour rendre toute la carte cliquable
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ClientDetailsScreen(project: project),
             ),
-            
-            const SizedBox(height: 12),
-            
-            // Informations sur l'installation
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
+          );
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // En-tête avec nom et date
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.architecture, size: 16, color: Colors.grey.shade700),
-                      const SizedBox(width: 8),
-                      Text('$numberOfPans pan${numberOfPans > 1 ? 's' : ''} de toit'),
-                      const Spacer(),
-                      Icon(Icons.electric_bolt, size: 16, color: Colors.orange.shade700),
-                      const SizedBox(width: 4),
-                      Text('${totalPower.toStringAsFixed(1)} kWp'),
-                    ],
+                  CircleAvatar(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    child: Text(
+                      projectName.isNotEmpty ? projectName.substring(0, 1).toUpperCase() : '?',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  if (clientEmail != null && clientEmail.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.email, size: 16, color: Colors.grey.shade700),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(clientEmail, style: const TextStyle(fontSize: 12))),
+                        Text(
+                          projectName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          'Créé le $formattedDate',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                          ),
+                        ),
                       ],
                     ),
-                  ],
-                  if (clientPhone != null && clientPhone.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.phone, size: 16, color: Colors.grey.shade700),
-                        const SizedBox(width: 8),
-                        Text(clientPhone, style: const TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                  ],
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: Colors.grey.shade400,
+                  ),
                 ],
               ),
-            ),
-          ],
+              
+              const SizedBox(height: 12),
+              
+              // Informations sur l'installation
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.architecture, size: 16, color: Colors.grey.shade700),
+                        const SizedBox(width: 8),
+                        Text('$numberOfPans pan${numberOfPans > 1 ? 's' : ''} de toit'),
+                        const Spacer(),
+                        Icon(Icons.electric_bolt, size: 16, color: Colors.orange.shade700),
+                        const SizedBox(width: 4),
+                        Text('${totalPower.toStringAsFixed(1)} kWp'),
+                      ],
+                    ),
+                    if (clientEmail != null && clientEmail.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.email, size: 16, color: Colors.grey.shade700),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(clientEmail, style: const TextStyle(fontSize: 12))),
+                        ],
+                      ),
+                    ],
+                    if (clientPhone != null && clientPhone.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.phone, size: 16, color: Colors.grey.shade700),
+                          const SizedBox(width: 8),
+                          Text(clientPhone, style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
