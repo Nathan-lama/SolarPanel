@@ -44,6 +44,7 @@ dependencies:
   http: ^1.1.0  # For API requests
   intl: ^0.18.0  # Add this package for NumberFormat
 
+  pdf: ^3.10.4
 
   # Supabase
   supabase_flutter: ^2.0.0

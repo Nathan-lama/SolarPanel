@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/roof_pan.dart';
 import '../models/shadow_measurement.dart';
+import '../services/html_to_pdf_service.dart';
 import 'pan_analysis_screen.dart';
 
 class ClientDetailsScreen extends StatelessWidget {
@@ -182,7 +183,11 @@ class ClientDetailsScreen extends StatelessWidget {
                   tooltip: 'Analyser ce pan',
                   onPressed: () => _navigateToPanAnalysis(context, pan, latitude, longitude),
                 ),
-                // ABSENCE du bouton de suppression - mode consultation uniquement
+                IconButton(
+                  icon: const Icon(Icons.picture_as_pdf),
+                  tooltip: 'Télécharger le rapport PDF',
+                  onPressed: () => _downloadPdfTemplate(context),
+                ),
               ],
             ),
             onTap: () => _navigateToPanAnalysis(context, pan, latitude, longitude),
@@ -204,5 +209,54 @@ class ClientDetailsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Fonction pour télécharger le template PDF
+  void _downloadPdfTemplate(BuildContext context) async {
+    try {
+      // Afficher un indicateur de chargement
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('Génération du PDF...'),
+            ],
+          ),
+        ),
+      );
+
+      // Générer et télécharger le PDF
+      await HtmlToPdfService.downloadTemplateAsPdf();
+      
+      // Fermer le dialog de chargement
+      if (context.mounted) {
+        Navigator.pop(context);
+        
+        // Afficher un message de succès
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PDF généré avec succès !'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      // Fermer le dialog de chargement en cas d'erreur
+      if (context.mounted) {
+        Navigator.pop(context);
+        
+        // Afficher un message d'erreur
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la génération du PDF : $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
