@@ -21,17 +21,17 @@ class HtmlToPdfService {
       final inclination = roofPan?.inclination ?? 35.0;
       final peakPower = roofPan?.peakPower ?? 1.0;
       
-      // Données d'analyse dynamiques ou valeurs par défaut
+      // Données d'analyse dynamiques ou valeurs par défaut à 0
       final monthlyProduction = analysisResults?['monthlyProduction'] ?? 
-          [48.1, 73.8, 113.6, 131.3, 134.2, 140.7, 146.8, 136.7, 121.6, 87.4, 52.8, 42.2];
+          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
       final monthlyIrradiation = analysisResults?['monthlyIrradiation'] ?? 
-          [56.6, 87.8, 139.3, 165.6, 171.1, 185.4, 195.8, 181.2, 156.3, 108.1, 63.7, 50.5];
+          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
       final monthlyStdDev = analysisResults?['monthlyStdDev'] ?? 
-          [8.6, 16.9, 19.0, 20.4, 18.3, 13.4, 15.4, 8.8, 11.4, 12.2, 7.8, 9.5];
-      final annualProduction = analysisResults?['annualProduction'] ?? 1229.11;
-      final annualIrradiation = analysisResults?['annualIrradiation'] ?? 1561.4;
-      final interannualVariability = analysisResults?['interannualVariability'] ?? 62.37;
-      final systemLosses = analysisResults?['systemLosses'] ?? 14.0;
+          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+      final annualProduction = analysisResults?['annualProduction'] ?? 0.0;
+      final annualIrradiation = analysisResults?['annualIrradiation'] ?? 0.0;
+      final interannualVariability = analysisResults?['interannualVariability'] ?? 0.0;
+      final systemLosses = analysisResults?['systemLosses'] ?? 0.0;
       
       // Créer un PDF avec les données dynamiques
       final pdf = pw.Document();
@@ -99,7 +99,7 @@ class HtmlToPdfService {
                             ['Base de données', 'PVGIS-SARAH3'],
                             ['Technologie PV', 'Silicium cristallin'],
                             ['PV installée', '${peakPower.toStringAsFixed(1)} kWp'],
-                            ['Pertes du système', '${systemLosses.toStringAsFixed(0)} %'],
+                            ['Pertes du système', '${systemLosses.toStringAsFixed(1)} %'],
                           ]),
                         ],
                       ),
@@ -127,8 +127,8 @@ class HtmlToPdfService {
                           ),
                           pw.SizedBox(height: 10),
                           ..._buildInfoItems([
-                            ['Angle d\'inclinaison', '${inclination.toStringAsFixed(0)} °'],
-                            ['Angle d\'azimut', '${orientation.toStringAsFixed(0)} °'],
+                            ['Angle d\'inclinaison', '${inclination.toStringAsFixed(1)} °'],
+                            ['Angle d\'azimut', '${orientation.toStringAsFixed(1)} °'],
                             ['Production annuelle PV', '${annualProduction.toStringAsFixed(2)} kWh'],
                             ['Irradiation annuelle', '${annualIrradiation.toStringAsFixed(1)} kWh/m²'],
                             ['Variabilité interannuelle', '${interannualVariability.toStringAsFixed(2)} kWh'],
@@ -160,10 +160,10 @@ class HtmlToPdfService {
                       ),
                     ),
                     pw.SizedBox(height: 10),
-                    pw.Bullet(text: 'Angle d\'incidence : ${(analysisResults?['incidenceAngleLoss'] ?? -2.86).toStringAsFixed(2)} %'),
-                    pw.Bullet(text: 'Effets spectraux : +${(analysisResults?['spectralLoss'] ?? 1.43).toStringAsFixed(2)} %'),
-                    pw.Bullet(text: 'Température et irradiance faible : ${(analysisResults?['temperatureLoss'] ?? -7.1).toStringAsFixed(1)} %'),
-                    pw.Bullet(text: 'Pertes totales : ${(analysisResults?['totalLosses'] ?? -21.28).toStringAsFixed(2)} %'),
+                    pw.Bullet(text: 'Angle d\'incidence : ${(analysisResults?['incidenceAngleLoss'] ?? 0.0).toStringAsFixed(2)} %'),
+                    pw.Bullet(text: 'Effets spectraux : +${(analysisResults?['spectralLoss'] ?? 0.0).toStringAsFixed(2)} %'),
+                    pw.Bullet(text: 'Température et irradiance faible : ${(analysisResults?['temperatureLoss'] ?? 0.0).toStringAsFixed(1)} %'),
+                    pw.Bullet(text: 'Pertes totales : ${(analysisResults?['totalLosses'] ?? 0.0).toStringAsFixed(2)} %'),
                   ],
                 ),
               ),
@@ -376,7 +376,11 @@ class HtmlToPdfService {
     
     // Convertir les valeurs en double de manière sécurisée
     final productionDoubles = production.map((value) => _toDouble(value)).toList();
-    final maxValue = productionDoubles.reduce((a, b) => a > b ? a : b) * 1.1; // 10% de marge
+    
+    // Si toutes les valeurs sont à 0, utiliser une échelle minimale pour l'affichage
+    final maxValue = productionDoubles.every((v) => v == 0.0) 
+        ? 100.0 // Échelle par défaut si pas de données
+        : productionDoubles.reduce((a, b) => a > b ? a : b) * 1.1; // 10% de marge
     
     return pw.Container(
       height: 150,
@@ -449,7 +453,11 @@ class HtmlToPdfService {
     
     // Convertir les valeurs en double de manière sécurisée
     final irradiationDoubles = irradiation.map((value) => _toDouble(value)).toList();
-    final maxValue = irradiationDoubles.reduce((a, b) => a > b ? a : b) * 1.1; // 10% de marge
+    
+    // Si toutes les valeurs sont à 0, utiliser une échelle minimale pour l'affichage
+    final maxValue = irradiationDoubles.every((v) => v == 0.0) 
+        ? 200.0 // Échelle par défaut si pas de données
+        : irradiationDoubles.reduce((a, b) => a > b ? a : b) * 1.1; // 10% de marge
     
     return pw.Container(
       height: 150,

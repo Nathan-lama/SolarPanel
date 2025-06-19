@@ -183,8 +183,8 @@ class ClientDetailsScreen extends StatelessWidget {
       final double latitude = (project['latitude'] ?? 0.0).toDouble();
       final double longitude = (project['longitude'] ?? 0.0).toDouble();
       
-      // Créer un ID unique pour le pan
-      final String panId = 'pan_${panIndex}_${pan.orientation.toStringAsFixed(1)}_${pan.inclination.toStringAsFixed(1)}';
+      // Créer un ID unique pour le pan avec plus de précision
+      final String panId = 'pan_${panIndex}_${pan.orientation.toStringAsFixed(2)}_${pan.inclination.toStringAsFixed(2)}';
       
       // Vérifier si on a déjà des résultats d'analyse
       Map<String, dynamic>? analysisResults = await AnalysisResultsService.getAnalysisResults(panId);
@@ -223,6 +223,10 @@ class ClientDetailsScreen extends StatelessWidget {
           }
 
           // Lancer l'analyse PVGIS avec votre service existant
+          debugPrint('=== Début analyse PVGIS ===');
+          debugPrint('Latitude: $latitude, Longitude: $longitude');
+          debugPrint('Pan - Orientation: ${pan.orientation}, Inclination: ${pan.inclination}, Power: ${pan.peakPower}');
+          
           final pvgisResponse = await PVGISService.calculateProduction(
             latitude: latitude,
             longitude: longitude,
@@ -231,15 +235,26 @@ class ClientDetailsScreen extends StatelessWidget {
             systemLoss: 14.0,
           );
 
+          debugPrint('=== Réponse PVGIS reçue ===');
+          debugPrint('Response keys: ${pvgisResponse.keys}');
+          
           // Formater et sauvegarder les résultats
           analysisResults = AnalysisResultsService.formatPvgisData(pvgisResponse);
+          debugPrint('=== Résultats formatés ===');
+          debugPrint('Formatted results: $analysisResults');
+          
           await AnalysisResultsService.saveAnalysisResults(panId, analysisResults);
+          debugPrint('=== Résultats sauvegardés ===');
 
         } catch (analysisError) {
           // En cas d'erreur d'analyse, utiliser les données par défaut
           debugPrint('Erreur lors de l\'analyse PVGIS : $analysisError');
+          debugPrint('Stack trace: ${StackTrace.current}');
           analysisResults = null;
         }
+      } else {
+        debugPrint('=== Utilisation des résultats existants ===');
+        debugPrint('Existing results: $analysisResults');
       }
 
       // Mettre à jour le message pour la génération PDF
@@ -319,7 +334,7 @@ class ClientDetailsScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       itemBuilder: (context, index) {
         final pan = roofPans[index];
-        final String panId = 'pan_${index}_${pan.orientation.toStringAsFixed(1)}_${pan.inclination.toStringAsFixed(1)}';
+        final String panId = 'pan_${index}_${pan.orientation.toStringAsFixed(2)}_${pan.inclination.toStringAsFixed(2)}';
         
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 8.0),
