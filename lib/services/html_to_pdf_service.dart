@@ -7,7 +7,8 @@ import 'package:share_plus/share_plus.dart';
 import '../models/roof_pan.dart';
 
 class HtmlToPdfService {
-  static Future<void> downloadTemplateAsPdf({
+  // Prépare le PDF et retourne le fichier, sans le partager
+  static Future<File> preparePdfFile({
     RoofPan? roofPan,
     double? latitude,
     double? longitude,
@@ -324,23 +325,38 @@ class HtmlToPdfService {
         ),
       );
       
-      // Sauvegarder le PDF et le partager
+      // Sauvegarder le PDF dans un fichier temporaire
       final Uint8List pdfBytes = await pdf.save();
       
-      // Obtenir le répertoire de téléchargement
+      // Obtenir le répertoire temporaire
       final directory = await getTemporaryDirectory();
-      final file = File('${directory.path}/rapport_pvgis_template.pdf');
+      final file = File('${directory.path}/rapport_pvgis_${DateTime.now().millisecondsSinceEpoch}.pdf');
       await file.writeAsBytes(pdfBytes);
       
-      // Partager le fichier
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Rapport PVGIS Template',
-      );
-      
+      return file;
     } catch (e) {
       throw Exception('Erreur lors de la génération du PDF : $e');
     }
+  }
+
+  // Méthode existante gardée pour compatibilité
+  static Future<bool> downloadTemplateAsPdf({
+    RoofPan? roofPan,
+    double? latitude,
+    double? longitude,
+    Map<String, dynamic>? analysisResults,
+  }) async {
+    final file = await preparePdfFile(
+      roofPan: roofPan,
+      latitude: latitude,
+      longitude: longitude,
+      analysisResults: analysisResults,
+    );
+    
+    // Partager le fichier
+    await Share.shareXFiles([XFile(file.path)], text: 'Rapport PVGIS Template');
+    
+    return true;
   }
   
   static List<pw.Widget> _buildInfoItems(List<List<String>> items) {

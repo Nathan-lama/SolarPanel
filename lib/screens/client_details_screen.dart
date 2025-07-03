@@ -5,6 +5,7 @@ import '../services/html_to_pdf_service.dart';
 import '../services/analysis_results_service.dart';
 import '../services/pvgis_service.dart';
 import 'pan_analysis_screen.dart';
+import 'package:share_plus/share_plus.dart';  // Ajout de l'import pour Share
 
 class ClientDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> project;
@@ -275,15 +276,15 @@ class ClientDetailsScreen extends StatelessWidget {
         );
       }
 
-      // Générer et télécharger le PDF avec les données
-      await HtmlToPdfService.downloadTemplateAsPdf(
+      // Préparer le PDF avec les données
+      final pdfFile = await HtmlToPdfService.preparePdfFile(
         roofPan: pan,
         latitude: latitude,
         longitude: longitude,
         analysisResults: analysisResults,
       );
       
-      // Fermer le dialog de chargement
+      // Fermer le dialog de chargement immédiatement une fois le PDF généré
       if (context.mounted) {
         Navigator.pop(context);
         
@@ -305,9 +306,12 @@ class ClientDetailsScreen extends StatelessWidget {
             duration: const Duration(seconds: 4),
           ),
         );
+        
+        // Partager le fichier APRÈS avoir fermé le dialogue
+        await Share.shareXFiles([XFile(pdfFile.path)], text: 'Rapport PVGIS');
 
         // Forcer la reconstruction pour mettre à jour l'indicateur d'analyse
-        if (analysisResults != null) {
+        if (analysisResults != null && context.mounted) {
           (context as Element).markNeedsBuild();
         }
       }
