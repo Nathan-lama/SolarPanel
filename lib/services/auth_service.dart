@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart'; // Add this import for debugPrint
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'user_service.dart';
 
 class AuthService {
   // Accès direct au client Supabase
@@ -12,10 +14,16 @@ class AuthService {
     required String password,
   }) async {
     try {
+      // Inscription avec métadonnées initiales
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
+        data: {
+          'role': 'free_user',
+          'created_at': DateTime.now().toIso8601String(),
+        },
       );
+      
       developer.log('[AUTH] Inscription effectuée: ${response.user?.id}', name: 'AuthService');
       return response;
     } catch (e) {
@@ -71,10 +79,23 @@ class AuthService {
   
   // Récupérer l'utilisateur actuel
   static User? getCurrentUser() {
-    return _supabase.auth.currentUser;
+    final user = _supabase.auth.currentUser;
+    debugPrint('[DEBUG] getCurrentUser: ${user?.id}, métadonnées: ${user?.userMetadata}');
+    return user;
   }
   
   // Accès au flux d'état d'authentification
   static Stream<AuthState> get authStateChanges => 
       _supabase.auth.onAuthStateChange;
+  
+  // Récupérer l'utilisateur actuel avec son rôle
+  static Future<Map<String, dynamic>> getCurrentUserWithRole() async {
+    final user = getCurrentUser();
+    if (user == null) {
+      return {'user': null, 'role': UserRole.freeUser};
+    }
+    
+    final role = await UserService.getCurrentUserRole();
+    return {'user': user, 'role': role};
+  }
 }

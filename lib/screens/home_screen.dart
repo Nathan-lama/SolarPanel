@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'profile_screen.dart';
 import 'clients_list_screen.dart';
 import 'new_analysis_screen.dart';
+import '../services/auth_service.dart';
+import '../services/user_service.dart';
+import '../router/auth_router.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -12,76 +15,164 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('SolarPanel'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.account_circle),
-            tooltip: 'Profil',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              );
+          // Bouton pour accéder au panneau d'administration (uniquement pour les admins)
+          FutureBuilder<bool>(
+            future: UserService.isAdmin(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox.shrink();
+              }
+              
+              final isAdmin = snapshot.data ?? false;
+              if (isAdmin) {
+                return IconButton(
+                  icon: const Icon(Icons.admin_panel_settings),
+                  tooltip: 'Panneau d\'administration',
+                  onPressed: () {
+                    // Navigation vers le panneau d'admin
+                    AuthRouter.navigateTo(context, '/admin_panel');
+                  },
+                );
+              }
+              return const SizedBox.shrink();
             },
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // En-tête avec logo
-              _buildHeader(context),
-              
-              const SizedBox(height: 40),
-              
-              // Section des actions principales - occupant tout l'espace disponible
-              Expanded(
-                child: _buildMainActions(context),
+          
+          // Menu utilisateur
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.account_circle),
+            onSelected: (value) async {
+              if (value == 'logout') {
+                await AuthService.signOut();
+                if (context.mounted) {
+                  Navigator.pushReplacementNamed(context, '/login');
+                }
+              } else if (value == 'upgrade') {
+                AuthRouter.navigateTo(context, '/upgrade');
+              } else if (value == 'profile') {
+                // Naviguer vers le profil
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    Icon(Icons.person),
+                    SizedBox(width: 8),
+                    Text('Mon profil'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'upgrade',
+                child: Row(
+                  children: [
+                    Icon(Icons.star),
+                    SizedBox(width: 8),
+                    Text('Statut Premium'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout),
+                    SizedBox(width: 8),
+                    Text('Déconnexion'),
+                  ],
+                ),
               ),
             ],
           ),
-        ),
+        ],
+      ),
+      body: FutureBuilder<UserRole>(
+        future: UserService.getCurrentUserRole(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          
+          final userRole = snapshot.data ?? UserRole.freeUser;
+          
+          // Affichage pour les utilisateurs gratuits
+          if (userRole == UserRole.freeUser) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.lock,
+                    size: 64,
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Fonctionnalités limitées',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      'Passez à la version premium pour débloquer toutes les fonctionnalités de l\'application',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () => AuthRouter.navigateTo(context, '/upgrade'),
+                    icon: const Icon(Icons.star),
+                    label: const Text('Mettre à niveau'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.secondary,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          
+          // Affichage pour les utilisateurs payants et admins
+          return const YourExistingHomeContent();
+        },
+      ),
+      
+      // Bouton FAB uniquement pour les utilisateurs payants et admins
+      floatingActionButton: FutureBuilder<bool>(
+        future: UserService.isPaidUser(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SizedBox.shrink();
+          }
+          
+          final isPaid = snapshot.data ?? false;
+          if (isPaid) {
+            return FloatingActionButton.extended(
+              onPressed: () => AuthRouter.navigateTo(context, '/new_analysis'),
+              icon: const Icon(Icons.add),
+              label: const Text('Nouvelle analyse'),
+            );
+          }
+          return const SizedBox.shrink();
+        },
       ),
     );
   }
-  
-  // Section d'en-tête
-  Widget _buildHeader(BuildContext context) {
-    return Column(
-      children: [
-        // Logo
-        Icon(
-          Icons.solar_power,
-          size: 72,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-        const SizedBox(height: 16),
-        // Titre et sous-titre
-        Text(
-          "SolarPanel",
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          "Gérez vos projets solaires simplement",
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Colors.grey.shade700,
-          ),
-        ),
-      ],
-    );
-  }
-  
-  // Section des actions principales avec les boutons
-  Widget _buildMainActions(BuildContext context) {
+}
+
+// Extrait du contenu existant du HomeScreen
+class YourExistingHomeContent extends StatelessWidget {
+  const YourExistingHomeContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // Votre contenu existant pour les utilisateurs payants
     return ListView(
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.all(16),
       children: [
         // Nouvelle analyse - carte principale plus grande
         _buildPrimaryActionCard(
